@@ -6,6 +6,11 @@ import Keyboard from './Inputs/Keyboard.js'
 import Physics from './Physics.js'
 import Player from './Player.js'
 import World from './World/World.js'
+import HUD from './UI/HUD.js'
+import Panel from './UI/Panel.js'
+import Tracker from './UI/Tracker.js'
+import Controls from './UI/Controls.js'
+import Loading from './UI/Loading.js'
 import Debug from './Debug.js'
 
 export default class Game {
@@ -48,19 +53,21 @@ export default class Game {
       this.physics = null
     }
 
+    this.loading = new Loading()
+    this.hud = new HUD()
+    this.panel = new Panel()
+    this.tracker = new Tracker()
+    this.controls = new Controls()
+
     this.player = new Player()
     this.world = new World()
+
+    this.hud.show()
+    this.loading.hide()
 
     this.loadState = 'ready'
     this.debug.expose()
     this.debug.emitLoadComplete()
-
-    const loading = document.querySelector('.js-loading')
-    const loadingBar = document.querySelector('.js-loading-bar')
-    if (loadingBar) loadingBar.style.width = '100%'
-    setTimeout(() => {
-      if (loading) loading.classList.add('is-hidden')
-    }, 300)
   }
 
   setupLighting() {

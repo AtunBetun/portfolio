@@ -1,6 +1,7 @@
 import Game from '../Game.js'
 import Room from './Room.js'
 import { ROOM_GRAPH } from '../../../data/rooms.js'
+import { CAREER_CONTENT } from '../../../data/content-map.js'
 
 export default class World {
   constructor() {
@@ -34,12 +35,21 @@ export default class World {
       this.activeRoom.hide()
     }
 
+    this.game.panel.hide()
+
     this.activeRoom = this.rooms[roomId]
     this.activeRoomId = roomId
     this.activeRoom.show()
 
     const spawn = this.activeRoom.getSpawn()
     this.game.player.mesh.position.set(spawn.x, 0.3, spawn.z)
+
+    const roomConfig = ROOM_GRAPH[roomId]
+    if (roomConfig.contentKey && CAREER_CONTENT[roomConfig.contentKey]) {
+      setTimeout(() => {
+        this.game.panel.showRoomContent(CAREER_CONTENT[roomConfig.contentKey])
+      }, 400)
+    }
   }
 
   update() {
