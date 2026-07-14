@@ -1,0 +1,32 @@
+{
+  "name": "portfolio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint sources/ data/",
+    "format": "prettier --check sources/ data/",
+    "test:unit": "bun test tests/unit/",
+    "test:e2e": "bunx playwright test",
+    "verify": "bun run lint && bun run format && bun run test:unit && bun run build && bun run test:e2e"
+  },
+  "dependencies": {
+    "@dimforge/rapier3d": "^0.14.0",
+    "gsap": "^3.12.7",
+    "nipplejs": "^0.10.2",
+    "three": "^0.172.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.28.0",
+    "@playwright/test": "^1.52.0",
+    "eslint": "^9.28.0",
+    "globals": "^16.1.0",
+    "prettier": "^3.5.3",
+    "vite": "^6.3.5",
+    "vite-plugin-top-level-await": "^1.5.0",
+    "vite-plugin-wasm": "^3.4.1"
+  }
+}

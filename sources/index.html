@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Alberto De Saint Malo — Portfolio</title>
+    <link rel="stylesheet" href="./style/index.css" />
+  </head>
+  <body>
+    <div class="game">
+      <canvas class="js-canvas"></canvas>
+
+      <!-- Loading screen -->
+      <div class="js-loading loading">
+        <div class="loading__text">Loading...</div>
+        <div class="loading__bar">
+          <div class="loading__bar-fill js-loading-bar"></div>
+        </div>
+      </div>
+
+      <!-- HUD overlay -->
+      <div class="js-hud hud" style="display: none">
+        <div class="hud__tracker js-tracker">
+          <span class="tracker__icon">&#9670;</span>
+          <span class="js-tracker-count">0</span>/<span class="js-tracker-total">0</span>
+        </div>
+      </div>
+
+      <!-- Content panel -->
+      <div class="js-panel panel" style="display: none">
+        <div class="panel__content js-panel-content"></div>
+        <button class="panel__close js-panel-close">&#10005;</button>
+      </div>
+
+      <!-- Controls hint -->
+      <div class="js-controls controls">
+        <div class="controls__keys">
+          <span>WASD</span> or <span>&#8593;&#8592;&#8595;&#8594;</span> to move
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="./index.js"></script>
+  </body>
+</html>
