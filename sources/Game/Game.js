@@ -5,6 +5,7 @@ import Camera from './Camera.js'
 import Keyboard from './Inputs/Keyboard.js'
 import Physics from './Physics.js'
 import Player from './Player.js'
+import World from './World/World.js'
 import Debug from './Debug.js'
 
 export default class Game {
@@ -48,6 +49,7 @@ export default class Game {
     }
 
     this.player = new Player()
+    this.world = new World()
 
     this.loadState = 'ready'
     this.debug.expose()

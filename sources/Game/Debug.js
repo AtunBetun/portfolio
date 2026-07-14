@@ -30,6 +30,14 @@ export default class Debug {
       get collectibles() {
         const w = Game.getInstance().world
         return w ? w.collectiblesCollected : 0
+      },
+      teleportPlayer(x, y, z) {
+        const p = Game.getInstance().player
+        if (p) p.mesh.position.set(x, y, z)
+      },
+      enterRoom(roomId) {
+        const w = Game.getInstance().world
+        if (w) w.enterRoom(roomId)
       }
     }
   }
