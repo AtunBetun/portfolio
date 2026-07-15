@@ -90,11 +90,7 @@ function buildPathways(group) {
 
     const stripGeo = new THREE.BoxGeometry(0.3, 0.02, length)
     const strip = new THREE.Mesh(stripGeo, pathMat)
-    strip.position.set(
-      (path.from[0] + path.to[0]) / 2,
-      0.02,
-      (path.from[1] + path.to[1]) / 2
-    )
+    strip.position.set((path.from[0] + path.to[0]) / 2, 0.02, (path.from[1] + path.to[1]) / 2)
     strip.rotation.y = angle
     group.add(strip)
 
@@ -103,11 +99,7 @@ function buildPathways(group) {
       const t = i / (dotCount + 1)
       const dotGeo = new THREE.SphereGeometry(0.05, 6, 4)
       const dot = new THREE.Mesh(dotGeo, pathMat)
-      dot.position.set(
-        path.from[0] + dx * t,
-        0.05,
-        path.from[1] + dz * t
-      )
+      dot.position.set(path.from[0] + dx * t, 0.05, path.from[1] + dz * t)
       group.add(dot)
     }
   }

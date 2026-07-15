@@ -164,11 +164,7 @@ export default class World {
 
       const stripGeo = new THREE.BoxGeometry(0.2, 0.02, length)
       const strip = new THREE.Mesh(stripGeo, pathMat)
-      strip.position.set(
-        hub.position.x + dx / 2,
-        0.015,
-        hub.position.z + dz / 2
-      )
+      strip.position.set(hub.position.x + dx / 2, 0.015, hub.position.z + dz / 2)
       strip.rotation.y = angle
       this.group.add(strip)
     }

@@ -75,7 +75,10 @@ export default class Player {
       if (this.velocity.lengthSq() > 0) {
         this.velocity.normalize()
         this.direction.copy(this.velocity)
-        this.body.setLinvel({ x: this.velocity.x * this.speed, y: 0, z: this.velocity.z * this.speed }, true)
+        this.body.setLinvel(
+          { x: this.velocity.x * this.speed, y: 0, z: this.velocity.z * this.speed },
+          true
+        )
       } else {
         this.body.setLinvel({ x: 0, y: 0, z: 0 }, true)
       }
