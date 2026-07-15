@@ -91,7 +91,25 @@ export default class World {
 
   transition(targetRoomId) {
     this.transitioning = true
-    this.enterRoom(targetRoomId)
+    if (this.activeRoom) {
+      this.activeRoom.hide()
+    }
+    this.game.panel.hide()
+
+    this.activeRoom = this.rooms[targetRoomId]
+    this.activeRoomId = targetRoomId
+    this.activeRoom.show()
+
+    const spawn = this.activeRoom.getSpawn()
+    this.game.player.mesh.position.set(spawn.x, 0.3, spawn.z)
+
+    const roomConfig = ROOM_GRAPH[targetRoomId]
+    if (roomConfig.contentKey && CAREER_CONTENT[roomConfig.contentKey]) {
+      setTimeout(() => {
+        this.game.panel.showRoomContent(CAREER_CONTENT[roomConfig.contentKey])
+      }, 400)
+    }
+
     setTimeout(() => {
       this.transitioning = false
     }, 500)
