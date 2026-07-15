@@ -1,8 +1,85 @@
-# Project Instructions for AI Agents
+# CLAUDE.md
 
-This file provides instructions and context for AI coding agents working on this project.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-<!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:970c3bf2 -->
+## Project Overview
+
+A 3D portfolio website built as a Wind Waker–inspired game. The player character runs around a toon-shaded island hub, interacting with objects that present career and life content. Built with Three.js for rendering and Rapier3D (WASM) for physics.
+
+## Commands
+
+```bash
+bun install               # install dependencies
+bun run dev               # start Vite dev server (sources/ is the Vite root)
+bun run build             # production build → dist/
+bun run preview           # serve production build on :4173
+
+bun run lint              # ESLint over sources/ and data/
+bun run format            # Prettier check (no --write)
+bun test tests/unit/      # bun:test unit tests
+bun test tests/unit/content-map.test.js  # run a single unit test
+
+bunx playwright test                     # all e2e specs (builds + serves first)
+bunx playwright test tests/smoke.spec.js # single e2e spec
+
+bun run verify            # full gate: lint → format → unit tests → build → e2e
+```
+
+## Architecture
+
+### Game loop and the singleton
+
+`sources/index.js` instantiates one `Game` (singleton via `Game.getInstance()`). Every subsystem (Camera, Physics, Player, World, Rendering, UI) grabs the instance in its constructor and registers its `update()` on the ordered **Ticker** event bus.
+
+Ticker fires `'tick'` each frame; listeners declare a numeric **order** (lower runs first):
+
+| Order | System |
+|-------|--------|
+| 3 | Physics.update (Rapier step) |
+| 5 | World.update (collectibles, water) |
+| 6 | Player.update (input → movement) |
+| 7 | Camera.update (chase-cam lerp) |
+| 998 | Rendering (OutlineEffect draw) |
+
+### Rendering pipeline
+
+Toon-cel shading with a Wind Waker palette. Key pieces:
+
+- `Rendering/Palette.js` — single source of truth for all colors (hex constants)
+- `Rendering/ToonMaterials.js` — `toon(colorKey)` / `toonFlat(colorKey)` factory functions; pass a key from `PALETTE`
+- `Rendering/ToonLights.js`, `SkyDome.js`, `Clouds.js` — environment setup
+- `Rendering.js` — WebGLRenderer + `OutlineEffect` for ink outlines
+
+### Physics (Rapier 3D)
+
+`Physics.js` wraps the Rapier WASM world. The player uses a **kinematic character controller** with auto-step and ground-snap. Physics is optional — if the WASM binary fails to load, the game runs in a simplified fallback mode without collision.
+
+### Data layer
+
+Content lives in `data/` as plain ES module exports, separate from rendering code:
+
+- `data/content-map.js` — life facts and career entries (keyed by room ID)
+- `data/rooms.js` — world layout, zone definitions, floor size
+
+### Testing
+
+- **Unit tests** (`tests/unit/`) use `bun:test` and validate data contracts (content-map integrity, room graph consistency).
+- **E2e tests** (`tests/*.spec.js`) use Playwright against the production build. The game exposes `window.__game` (see `Debug.js`) for assertions on load state, player position, room transitions.
+- Playwright runs two projects: `desktop` (1280×720) and `mobile` (375×667, touch).
+
+### Input system
+
+Keyboard (`Inputs/Keyboard.js`) and touch joystick via nipple.js (`Inputs/Touch.js`). Movement is camera-relative — raw input is projected onto the camera's forward/right plane in `Player.update`.
+
+## Conventions
+
+- **No semicolons**, single quotes, trailing comma: none (Prettier enforces; see `.prettierrc`).
+- Pure ES modules (`"type": "module"`). Use `.js` extensions in all import paths.
+- Colors are never hardcoded in geometry/material code — always reference `PALETTE` keys.
+- All source lives under `sources/Game/`; `data/` holds content only (no Three.js imports).
+- Vite root is `sources/` (not the repo root); static assets go in a top-level `static/` dir.
+- WASM plugins (`vite-plugin-wasm`, `vite-plugin-top-level-await`) are required for Rapier.
+
 ## Beads Issue Tracker
 
 This project uses **bd (beads)** for issue tracking. Run `bd prime` to see full workflow context and commands.
@@ -56,23 +133,3 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 - Explicit user or orchestrator instructions override this Beads block.
 - Do not commit or push without clear authority from the active profile or the current user request.
 - If a required sync or push is blocked, stop and report the exact command and error.
-<!-- END BEADS INTEGRATION -->
-
-
-## Build & Test
-
-_Add your build and test commands here_
-
-```bash
-# Example:
-# npm install
-# npm test
-```
-
-## Architecture Overview
-
-_Add a brief overview of your project architecture_
-
-## Conventions & Patterns
-
-_Add your project-specific conventions here_
