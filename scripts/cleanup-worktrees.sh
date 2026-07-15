@@ -1,69 +1,24 @@
 #!/usr/bin/env bash
 #
-# cleanup-worktrees.sh — Remove worktrees whose PRs have been merged or closed
+# cleanup-worktrees.sh — Cron launcher for worktree cleanup
 #
-# Usage:
-#   ./scripts/cleanup-worktrees.sh          # clean up merged
-#   ./scripts/cleanup-worktrees.sh --dry-run
-#   ./scripts/cleanup-worktrees.sh --all    # remove ALL worktrees (nuclear option)
+# Removes worktrees for issues that have been merged into main or closed.
+# All local.
 #
 set -euo pipefail
 
 REPO_ROOT="$(git -C "$(dirname "$0")/.." rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
-WORKTREE_DIR="$REPO_ROOT/.worktrees"
-DRY_RUN=false
-ALL=false
+claude --bg -p "Clean up stale worktrees in .worktrees/. All local — no GitHub.
 
-for arg in "$@"; do
-  case "$arg" in
-    --dry-run) DRY_RUN=true ;;
-    --all) ALL=true ;;
-  esac
-done
-
-if [ ! -d "$WORKTREE_DIR" ]; then
-  echo "[cleanup] No worktrees directory. Nothing to do."
-  exit 0
-fi
-
-# List worktrees created by the dispatcher
-for wt in "$WORKTREE_DIR"/*/; do
-  [ -d "$wt" ] || continue
-  ISSUE_ID=$(basename "$wt")
-  BRANCH_NAME="implement/$ISSUE_ID"
-
-  if [ "$ALL" = true ]; then
-    echo "[cleanup] Removing: $wt (branch: $BRANCH_NAME)"
-    if [ "$DRY_RUN" = false ]; then
-      git worktree remove "$wt" --force 2>/dev/null || rm -rf "$wt"
-      git branch -D "$BRANCH_NAME" 2>/dev/null || true
-    fi
-    continue
-  fi
-
-  # Check if the PR for this branch is merged or closed
-  PR_STATE=$(gh pr list --head "$BRANCH_NAME" --state all --json state --jq '.[0].state // "NONE"' 2>/dev/null || echo "UNKNOWN")
-
-  case "$PR_STATE" in
-    MERGED|CLOSED)
-      echo "[cleanup] $ISSUE_ID — PR $PR_STATE. Removing worktree."
-      if [ "$DRY_RUN" = false ]; then
-        git worktree remove "$wt" --force 2>/dev/null || rm -rf "$wt"
-        git branch -D "$BRANCH_NAME" 2>/dev/null || true
-      fi
-      ;;
-    OPEN)
-      echo "[cleanup] $ISSUE_ID — PR still open. Keeping."
-      ;;
-    *)
-      echo "[cleanup] $ISSUE_ID — No PR found (state: $PR_STATE). Keeping."
-      ;;
-  esac
-done
-
-# Prune any dangling worktree references
-git worktree prune 2>/dev/null || true
-
-echo "[cleanup] Done."
+For each directory in .worktrees/:
+1. The directory name is a bead issue ID. The branch is implement/<issue-id>.
+2. Check if that branch has been merged into main:
+   git branch --merged main | grep implement/<issue-id>
+3. If merged: remove the worktree (git worktree remove .worktrees/<issue-id>),
+   delete the local branch (git branch -d implement/<issue-id>),
+   and close the bead if still open (bd close <issue-id>).
+4. Also check for closed beads whose worktree still exists — remove those too.
+5. Run 'git worktree prune' at the end.
+6. Report what you cleaned up."
