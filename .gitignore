@@ -13,3 +13,6 @@ playwright-report/
 .beads-credential-key
 .beads/proxieddb/
 .claude/worktrees/
+
+# Agent worktrees (created by dispatch-ready-specs.sh)
+.worktrees/

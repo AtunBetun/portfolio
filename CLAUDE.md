@@ -80,6 +80,46 @@ Keyboard (`Inputs/Keyboard.js`) and touch joystick via nipple.js (`Inputs/Touch.
 - Vite root is `sources/` (not the repo root); static assets go in a top-level `static/` dir.
 - WASM plugins (`vite-plugin-wasm`, `vite-plugin-top-level-await`) are required for Rapier.
 
+## Spec-Driven Agent Pipeline
+
+This project uses an automated pipeline where Claude agents implement features from
+detailed specs. The human stays in the loop at three hard gates.
+
+### Human Gates
+
+| Gate | Trigger | Human action |
+|------|---------|-------------|
+| **Planning** | Claude proposes a feature plan | Approve or adjust |
+| **Spec approval** | Spec written at `docs/specs/<id>.md` | Say "ready" to green-light |
+| **Final merge** | Agent implements on branch | Review diff, merge to main |
+
+### Spec Lifecycle Labels
+
+| Label | Set by | Meaning |
+|-------|--------|---------|
+| `spec:idea` | Claude or human | Issue noted |
+| `spec:planned` | Claude | Spec drafted |
+| `spec:ready` | **Human only** | Approved for implementation |
+| `spec:implemented` | Agent | Code on branch |
+| `spec:reviewed` | Reviewer agent | Review passed |
+| `spec:changes-requested` | Reviewer | Needs rework |
+
+### Agent Rules
+
+- **Never** promote a spec to `spec:ready` — that's the human's gate
+- **Never** merge into main — that's the human's gate
+- **Never** push to remotes — all work is local
+- **Always** work in a worktree (`implement/<bead-id>` branch)
+- **Always** reference the bead ID in commit messages
+- Implementer agents use team-maintainer profile within their worktree only
+
+### Worktree Convention
+
+- Path: `.worktrees/<bead-id>/`
+- Branch: `implement/<bead-id>`
+- One worktree per issue, one agent per worktree
+- Cleanup cron removes worktrees after branches are merged
+
 ## Beads Issue Tracker
 
 This project uses **bd (beads)** for issue tracking. Run `bd prime` to see full workflow context and commands.
@@ -91,6 +131,8 @@ bd ready              # Find available work
 bd show <id>          # View issue details
 bd update <id> --claim  # Claim work
 bd close <id>         # Complete work
+bd comment <id> "text"  # Post review comment
+bd query "label=spec:ready"  # Find by label
 ```
 
 ### Rules
@@ -99,37 +141,15 @@ bd close <id>         # Complete work
 - Run `bd prime` for detailed command reference and session close protocol
 - Use `bd remember` for persistent knowledge — do NOT use MEMORY.md files
 
-**Architecture in one line:** issues live in a local Dolt DB; sync uses `refs/dolt/data` on your git remote; `.beads/issues.jsonl` is a passive export. See https://github.com/gastownhall/beads/blob/main/docs/SYNC_CONCEPTS.md for details and anti-patterns.
-
 ## Agent Context Profiles
 
-The managed Beads block is task-tracking guidance, not permission to override repository, user, or orchestrator instructions.
-
-- **Conservative (default)**: Use `bd` for task tracking. Do not run git commits, git pushes, or Dolt remote sync unless explicitly asked. At handoff, report changed files, validation, and suggested next commands.
-- **Minimal**: Keep tool instruction files as pointers to `bd prime`; use the same conservative git policy unless active instructions say otherwise.
-- **Team-maintainer**: Only when the repository explicitly opts in, agents may close beads, run quality gates, commit, and push as part of session close. A current "do not commit" or "do not push" instruction still wins.
+- **Conservative (default)**: Do not commit, push, or sync unless explicitly asked.
+- **Team-maintainer (implementer agents only)**: May commit on `implement/*` branches
+  within their worktree. May NOT merge to main, push, or modify shared config.
 
 ## Session Completion
 
-This protocol applies when ending a Beads implementation workflow. It is subordinate to explicit user, repository, and orchestrator instructions.
-
-1. **File issues for remaining work** - Create beads for anything that needs follow-up
-2. **Run quality gates** (if code changed) - Tests, linters, builds
-3. **Update issue status** - Close finished work, update in-progress items
-4. **Handle git/sync by active profile**:
-   ```bash
-   # Conservative/minimal/default: report status and proposed commands; wait for approval.
-   git status
-
-   # Team-maintainer opt-in only, unless current instructions forbid it:
-   git pull --rebase
-   bd dolt push
-   git push
-   git status
-   ```
-5. **Hand off** - Summarize changes, validation, issue status, and any blocked sync/commit/push step
-
-**Critical rules:**
-- Explicit user or orchestrator instructions override this Beads block.
-- Do not commit or push without clear authority from the active profile or the current user request.
-- If a required sync or push is blocked, stop and report the exact command and error.
+1. Ensure work is committed on the feature branch (if implementing)
+2. Update bead labels (spec:implemented when done)
+3. Report: what was done, what branch, any issues
+4. Never merge. Never push. The human handles that.
