@@ -19,7 +19,17 @@ export default defineConfig({
   projects: [
     {
       name: 'desktop',
+      testIgnore: 'mobile.spec.js',
       use: { viewport: { width: 1280, height: 720 } }
+    },
+    {
+      name: 'mobile',
+      testMatch: 'mobile.spec.js',
+      use: {
+        viewport: { width: 375, height: 667 },
+        isMobile: true,
+        hasTouch: true
+      }
     }
   ],
   outputDir: './tests/screenshots'

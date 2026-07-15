@@ -3,6 +3,7 @@ import Ticker from './Ticker.js'
 import Rendering from './Rendering.js'
 import Camera from './Camera.js'
 import Keyboard from './Inputs/Keyboard.js'
+import Touch from './Inputs/Touch.js'
 import Physics from './Physics.js'
 import Player from './Player.js'
 import World from './World/World.js'
@@ -53,6 +54,7 @@ export default class Game {
       this.physics = null
     }
 
+    this.touch = new Touch()
     this.loading = new Loading()
     this.hud = new HUD()
     this.panel = new Panel()

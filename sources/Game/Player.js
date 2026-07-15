@@ -59,12 +59,18 @@ export default class Player {
 
   update(delta) {
     const kb = this.game.keyboard
+    const touch = this.game.touch
     this.velocity.set(0, 0, 0)
 
-    if (kb.up) this.velocity.z -= 1
-    if (kb.down) this.velocity.z += 1
-    if (kb.left) this.velocity.x -= 1
-    if (kb.right) this.velocity.x += 1
+    if (touch && touch.active && (touch.direction.x !== 0 || touch.direction.z !== 0)) {
+      this.velocity.x = touch.direction.x
+      this.velocity.z = touch.direction.z
+    } else {
+      if (kb.up) this.velocity.z -= 1
+      if (kb.down) this.velocity.z += 1
+      if (kb.left) this.velocity.x -= 1
+      if (kb.right) this.velocity.x += 1
+    }
 
     if (this.velocity.lengthSq() > 0) {
       this.velocity.normalize().multiplyScalar(this.speed * delta)

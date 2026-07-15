@@ -5,8 +5,10 @@ import { CAREER_CONTENT } from '../../../data/content-map.js'
 import { buildPGProps, getPGCollectibles } from './Rooms/PGRoom.js'
 import { buildBlackstoneProps, getBlackstoneCollectibles } from './Rooms/BlackstoneRoom.js'
 import { buildAmazonProps, getAmazonCollectibles } from './Rooms/AmazonRoom.js'
+import { buildHubProps } from './Rooms/HubRoom.js'
 
 const ROOM_BUILDERS = {
+  hub: { buildProps: buildHubProps },
   'career-pg': { buildProps: buildPGProps, collectibles: getPGCollectibles() },
   'career-blackstone': {
     buildProps: buildBlackstoneProps,
