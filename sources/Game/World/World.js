@@ -7,6 +7,8 @@ import { buildPGProps, getPGCollectibles } from './Rooms/PGRoom.js'
 import { buildBlackstoneProps, getBlackstoneCollectibles } from './Rooms/BlackstoneRoom.js'
 import { buildAmazonProps, getAmazonCollectibles } from './Rooms/AmazonRoom.js'
 import { buildHubProps } from './Rooms/HubRoom.js'
+import { toon, toonFlat } from '../Rendering/ToonMaterials.js'
+import { PALETTE } from '../Rendering/Palette.js'
 
 const ZONE_BUILDERS = {
   hub: { buildProps: buildHubProps },
@@ -50,31 +52,22 @@ export default class World {
   buildFloor() {
     const size = WORLD_LAYOUT.floorSize
     const floorGeo = new THREE.PlaneGeometry(size, size, 1, 1)
-    const floorMat = new THREE.MeshStandardMaterial({
-      color: 0x0d0d0d,
-      roughness: 0.95
-    })
+    const floorMat = toonFlat('grass')
     const floor = new THREE.Mesh(floorGeo, floorMat)
     floor.rotation.x = -Math.PI / 2
     floor.position.y = -0.01
     floor.receiveShadow = true
     this.group.add(floor)
 
-    const gridMat = new THREE.MeshStandardMaterial({
-      color: 0x00ff41,
-      emissive: 0x00ff41,
-      emissiveIntensity: 0.1,
-      transparent: true,
-      opacity: 0.15
-    })
-    for (let i = -20; i <= 20; i += 2) {
-      const hGeo = new THREE.BoxGeometry(size, 0.005, 0.02)
-      const h = new THREE.Mesh(hGeo, gridMat)
+    const pathMat = toonFlat('path')
+    for (let i = -20; i <= 20; i += 4) {
+      const hGeo = new THREE.BoxGeometry(size, 0.01, 0.3)
+      const h = new THREE.Mesh(hGeo, pathMat)
       h.position.set(0, 0.005, i)
       this.group.add(h)
 
-      const vGeo = new THREE.BoxGeometry(0.02, 0.005, size)
-      const v = new THREE.Mesh(vGeo, gridMat)
+      const vGeo = new THREE.BoxGeometry(0.3, 0.01, size)
+      const v = new THREE.Mesh(vGeo, pathMat)
       v.position.set(i, 0.005, 0)
       this.group.add(v)
     }
@@ -110,35 +103,24 @@ export default class World {
 
   buildZonePlatform(zoneGroup, zone) {
     const r = zone.radius
+    const zoneColor = zone.color || PALETTE.grass
     const platformGeo = new THREE.CylinderGeometry(r, r, 0.08, zone.locked ? 6 : 16)
-    const platformMat = new THREE.MeshStandardMaterial({
-      color: zone.locked ? 0x1a1a1a : 0x151515,
-      flatShading: true
-    })
+    const platformMat = toon(zone.locked ? PALETTE.stoneDark : zoneColor)
     const platform = new THREE.Mesh(platformGeo, platformMat)
     platform.position.y = 0.04
     platform.receiveShadow = true
     zoneGroup.add(platform)
 
-    const ringGeo = new THREE.TorusGeometry(r + 0.1, 0.04, 6, zone.locked ? 6 : 32)
-    const ringMat = new THREE.MeshStandardMaterial({
-      color: zone.locked ? 0x333333 : 0x00ff41,
-      emissive: zone.locked ? 0x111111 : 0x00ff41,
-      emissiveIntensity: zone.locked ? 0.1 : 0.4
-    })
+    const ringGeo = new THREE.TorusGeometry(r + 0.1, 0.06, 8, zone.locked ? 6 : 32)
+    const ringMat = toon(zone.locked ? PALETTE.stone : zoneColor)
     const ring = new THREE.Mesh(ringGeo, ringMat)
     ring.rotation.x = -Math.PI / 2
     ring.position.y = 0.09
     zoneGroup.add(ring)
 
     if (zone.locked) {
-      const lockGeo = new THREE.BoxGeometry(0.4, 0.6, 0.1)
-      const lockMat = new THREE.MeshStandardMaterial({
-        color: 0x333333,
-        emissive: 0x333333,
-        emissiveIntensity: 0.2,
-        flatShading: true
-      })
+      const lockGeo = new THREE.BoxGeometry(0.5, 0.7, 0.2)
+      const lockMat = toon(PALETTE.wood)
       const lock = new THREE.Mesh(lockGeo, lockMat)
       lock.position.y = 1
       zoneGroup.add(lock)
@@ -147,13 +129,7 @@ export default class World {
 
   buildPaths() {
     const hub = WORLD_LAYOUT.zones.find((z) => z.id === 'hub')
-    const pathMat = new THREE.MeshStandardMaterial({
-      color: 0x00ff41,
-      emissive: 0x00ff41,
-      emissiveIntensity: 0.2,
-      transparent: true,
-      opacity: 0.4
-    })
+    const pathMat = toon('pathDark')
 
     for (const zone of WORLD_LAYOUT.zones) {
       if (zone.id === 'hub') continue
@@ -162,7 +138,7 @@ export default class World {
       const length = Math.sqrt(dx * dx + dz * dz)
       const angle = Math.atan2(dx, dz)
 
-      const stripGeo = new THREE.BoxGeometry(0.2, 0.02, length)
+      const stripGeo = new THREE.BoxGeometry(0.8, 0.03, length)
       const strip = new THREE.Mesh(stripGeo, pathMat)
       strip.position.set(hub.position.x + dx / 2, 0.015, hub.position.z + dz / 2)
       strip.rotation.y = angle
