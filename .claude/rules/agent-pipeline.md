@@ -45,7 +45,24 @@ Agents NEVER merge into main.
 ## Spec Lifecycle Labels
 
 ```
-spec:idea → spec:planned → [HUMAN GATE] → spec:ready → spec:implemented → spec:reviewed → [HUMAN GATE: merge]
+spec:idea → spec:planned → [HUMAN GATE] → spec:ready → spec:implemented → spec:in-review → spec:reviewed → [HUMAN GATE: merge]
+                                                                              ↘ spec:changes-requested → [HUMAN re-promotes to ready]
+                                                                              ↘ spec:blocked → [HUMAN investigates]
+```
+
+## Label Ordering for Implementers
+
+When transitioning labels, always ADD the new label BEFORE removing the old one.
+This prevents a crash between the two commands from leaving a bead with no lifecycle label.
+
+```bash
+# Correct: add first, then remove
+bd label add <id> spec:implemented
+bd label remove <id> spec:ready
+
+# WRONG: remove first risks leaving bead invisible if crash occurs
+bd label remove <id> spec:ready    # ← crash here = bead in limbo
+bd label add <id> spec:implemented
 ```
 
 ## Worktree Convention

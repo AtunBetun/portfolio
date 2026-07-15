@@ -9,7 +9,7 @@
 #
 set -euo pipefail
 
-export PATH="$HOME/.toolbox/bin:$HOME/.local/bin:$PATH"
+export PATH="$HOME/.toolbox/bin:$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
 if [ $# -lt 2 ]; then
   echo "Usage: $0 <bead-id> <idea|planned|ready>"
@@ -34,15 +34,16 @@ case "$TARGET" in
     ;;
 esac
 
-# For 'ready', verify spec file exists AND is committed
+# For 'ready', verify spec file exists AND is committed to main
+# (both promote and dispatcher check main: consistently)
 if [ "$TARGET" = "ready" ]; then
   if [ ! -f "$SPEC_FILE" ]; then
     echo "ERROR: Cannot promote to ready — no spec file at $SPEC_FILE"
     echo "Create one from: cp docs/specs/TEMPLATE.md $SPEC_FILE"
     exit 1
   fi
-  if ! git cat-file -e "HEAD:docs/specs/${BEAD_ID}.md" 2>/dev/null; then
-    echo "ERROR: Spec file exists but is not committed to git."
+  if ! git cat-file -e "main:docs/specs/${BEAD_ID}.md" 2>/dev/null; then
+    echo "ERROR: Spec file exists but is not committed to main."
     echo "Commit it first: git add $SPEC_FILE && git commit -m 'spec: $BEAD_ID'"
     exit 1
   fi
@@ -55,7 +56,7 @@ if [ "$TARGET" = "planned" ] && [ ! -f "$SPEC_FILE" ]; then
 fi
 
 # Now safe to modify labels — target is validated
-for label in spec:idea spec:planned spec:ready spec:implemented spec:reviewed spec:changes-requested spec:blocked; do
+for label in spec:idea spec:planned spec:ready spec:implemented spec:reviewed spec:changes-requested spec:blocked spec:in-review; do
   bd label remove "$BEAD_ID" "$label" 2>/dev/null || true
 done
 

@@ -17,7 +17,7 @@ REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
 # Ensure tools are on PATH (cron has minimal PATH)
-export PATH="$HOME/.toolbox/bin:$HOME/.local/bin:$PATH"
+export PATH="$HOME/.toolbox/bin:$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
 DRY_RUN=false
 MAX_IMPLEMENTERS=4
@@ -51,11 +51,9 @@ fi
 
 echo "[dispatch] Found $ISSUE_COUNT ready issue(s)."
 
-# Count only IMPLEMENTER agents (implement/* in their cwd), not reviewer/cleanup/other
+# Count running agents for this repo
 RUNNING=$(claude agents --json --cwd "$REPO_ROOT" 2>/dev/null \
   | jq '[.[] | select(.status == "running")] | length' 2>/dev/null || echo "0")
-# Subtract non-implementer sessions (this dispatcher, reviewer, cleanup)
-# Conservative: count all running sessions toward the cap
 SLOTS=$((MAX_IMPLEMENTERS - RUNNING))
 
 if [ "$SLOTS" -le 0 ]; then
@@ -65,8 +63,13 @@ fi
 
 echo "[dispatch] $RUNNING running, $SLOTS slot(s) available."
 
-# Process each ready issue
-echo "$READY_ISSUES" | jq -c '.[]' | head -n "$SLOTS" | while IFS= read -r issue; do
+# Read issues into an array to avoid pipe subshell and SIGPIPE issues
+readarray -t ISSUE_LINES < <(echo "$READY_ISSUES" | jq -c '.[]')
+
+DISPATCHED=0
+for issue in "${ISSUE_LINES[@]}"; do
+  [ "$DISPATCHED" -ge "$SLOTS" ] && break
+
   ISSUE_ID=$(echo "$issue" | jq -r '.id')
   ISSUE_TITLE=$(echo "$issue" | jq -r '.title')
   SPEC_FILE="docs/specs/${ISSUE_ID}.md"
@@ -91,12 +94,13 @@ echo "$READY_ISSUES" | jq -c '.[]' | head -n "$SLOTS" | while IFS= read -r issue
   if [ -d "$WORKTREE_PATH" ]; then
     echo "[dispatch] Removing stale worktree: $WORKTREE_PATH"
     git worktree remove "$WORKTREE_PATH" --force 2>/dev/null || rm -rf "$WORKTREE_PATH"
+    git worktree prune 2>/dev/null || true
   fi
 
   # Clean up stale branch if it exists and isn't checked out elsewhere
   if git show-ref --verify --quiet "refs/heads/$BRANCH_NAME" 2>/dev/null; then
-    # Only delete if no worktree has it checked out
-    if ! git worktree list --porcelain | grep -q "branch refs/heads/$BRANCH_NAME"; then
+    # Only delete if no worktree has it checked out (anchored match)
+    if ! git worktree list --porcelain | grep -qx "branch refs/heads/$BRANCH_NAME"; then
       git branch -D "$BRANCH_NAME" 2>/dev/null || true
     else
       echo "[dispatch] WARNING: Branch $BRANCH_NAME is checked out in another worktree. Skipping."
@@ -111,12 +115,19 @@ echo "$READY_ISSUES" | jq -c '.[]' | head -n "$SLOTS" | while IFS= read -r issue
   fi
 
   # Claim the issue AFTER worktree is successfully created
-  bd update "$ISSUE_ID" --claim --quiet 2>/dev/null || true
+  # If claim fails, remove the worktree to avoid orphan state
+  if ! bd update "$ISSUE_ID" --claim --quiet 2>/dev/null; then
+    echo "[dispatch] ERROR: Failed to claim $ISSUE_ID. Removing worktree."
+    git worktree remove "$WORKTREE_PATH" --force 2>/dev/null || rm -rf "$WORKTREE_PATH"
+    git worktree prune 2>/dev/null || true
+    git branch -D "$BRANCH_NAME" 2>/dev/null || true
+    continue
+  fi
 
   echo "[dispatch] Worktree ready: $WORKTREE_PATH (branch: $BRANCH_NAME)"
 
   # Spawn implementer — Claude only for the judgment work (implementation)
-  # The agent's cwd is set to the worktree via cd in a subshell
+  # Close fd 9 (flock) and redirect stdin from /dev/null to prevent pipe drain
   PROMPT="You are implementing a feature for this project.
 
 Your working directory is already set to the correct location.
@@ -128,21 +139,22 @@ Instructions:
 3. Write tests as described in the Test Plan section.
 4. Run the tests and fix any failures.
 5. Commit your work with message: feat($ISSUE_ID): $ISSUE_TITLE
-6. When done, run these commands to update the bead:
-   bd label remove $ISSUE_ID spec:ready
+6. When done, run these commands to update the bead (add FIRST, then remove):
    bd label add $ISSUE_ID spec:implemented
-7. If you cannot complete the work (tests won't pass, spec is ambiguous):
    bd label remove $ISSUE_ID spec:ready
+7. If you cannot complete the work (tests won't pass, spec is ambiguous):
    bd label add $ISSUE_ID spec:blocked
+   bd label remove $ISSUE_ID spec:ready
    bd comment $ISSUE_ID \"BLOCKED: <reason>\"
 
 Do NOT push. Do NOT merge into main. Do NOT switch branches.
 All work stays local on this branch."
 
-  (cd "$WORKTREE_PATH" && claude --bg -p "$PROMPT") &
+  (cd "$WORKTREE_PATH" && claude --bg -p "$PROMPT" </dev/null 9>&-) &
 
   echo "[dispatch] Implementer spawned for $ISSUE_ID"
+  DISPATCHED=$((DISPATCHED + 1))
   sleep 1
 done
 
-echo "[dispatch] Done. Watch with: claude agents"
+echo "[dispatch] Dispatched $DISPATCHED implementer(s). Watch with: claude agents"

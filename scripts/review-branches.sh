@@ -11,7 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
-export PATH="$HOME/.toolbox/bin:$HOME/.local/bin:$PATH"
+export PATH="$HOME/.toolbox/bin:$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
 LOCK_FILE="$REPO_ROOT/.worktrees/.review.lock"
 mkdir -p "$REPO_ROOT/.worktrees"
@@ -24,8 +24,9 @@ if ! flock -n 9; then
 fi
 
 # Query for implemented issues that need review
-# Exclude: already reviewed, changes-requested (awaiting human re-queue), closed
-READY_FOR_REVIEW=$(bd query "label=spec:implemented AND NOT label=spec:reviewed AND NOT label=spec:changes-requested AND status=open" --json 2>/dev/null || echo "[]")
+# Exclude: already reviewed, changes-requested (awaiting human re-queue),
+# in-review (already being reviewed), closed
+READY_FOR_REVIEW=$(bd query "label=spec:implemented AND NOT label=spec:reviewed AND NOT label=spec:changes-requested AND NOT label=spec:in-review AND status=open" --json 2>/dev/null || echo "[]")
 REVIEW_COUNT=$(echo "$READY_FOR_REVIEW" | jq 'length')
 
 if [ "$REVIEW_COUNT" -eq 0 ]; then
@@ -36,13 +37,13 @@ fi
 echo "[reviewer] Found $REVIEW_COUNT branch(es) to review."
 
 MAX_REVIEWS=2
-REVIEWED=0
 
-echo "$READY_FOR_REVIEW" | jq -c '.[]' | while IFS= read -r issue; do
-  if [ "$REVIEWED" -ge "$MAX_REVIEWS" ]; then
-    echo "[reviewer] Hit max reviews ($MAX_REVIEWS). Stopping."
-    break
-  fi
+# Read into array to avoid pipe subshell issues
+readarray -t REVIEW_LINES < <(echo "$READY_FOR_REVIEW" | jq -c '.[]')
+
+REVIEWED=0
+for issue in "${REVIEW_LINES[@]}"; do
+  [ "$REVIEWED" -ge "$MAX_REVIEWS" ] && break
 
   ISSUE_ID=$(echo "$issue" | jq -r '.id')
   ISSUE_TITLE=$(echo "$issue" | jq -r '.title')
@@ -64,6 +65,9 @@ echo "$READY_FOR_REVIEW" | jq -c '.[]' | while IFS= read -r issue; do
 
   echo "[reviewer] Reviewing: $ISSUE_ID — $ISSUE_TITLE ($AHEAD commits)"
 
+  # Mark as in-review to prevent duplicate reviewer spawns on next cron tick
+  bd label add "$ISSUE_ID" spec:in-review 2>/dev/null || true
+
   PROMPT="You are reviewing an implementation branch for spec compliance and code quality.
 
 Branch: $BRANCH_NAME ($AHEAD commits ahead of main)
@@ -83,17 +87,20 @@ Steps:
 5. Verdict:
    - If APPROVED (all requirements met, code quality good):
      bd label add $ISSUE_ID spec:reviewed
+     bd label remove $ISSUE_ID spec:in-review
    - If CHANGES NEEDED (issues found):
      bd label add $ISSUE_ID spec:changes-requested
+     bd label remove $ISSUE_ID spec:in-review
      Include specific fix instructions in your comment.
 
 Be thorough but fair. Focus on correctness and spec compliance over style."
 
-  claude --bg -p "$PROMPT" &
+  # Close fd 9 (flock) and redirect stdin from /dev/null
+  claude --bg -p "$PROMPT" </dev/null 9>&- &
 
   echo "[reviewer] Review agent spawned for $ISSUE_ID"
   REVIEWED=$((REVIEWED + 1))
   sleep 1
 done
 
-echo "[reviewer] Done. Watch with: claude agents"
+echo "[reviewer] Spawned $REVIEWED review(s). Watch with: claude agents"

@@ -31,8 +31,9 @@ if [ "${1:-}" = "--remove" ]; then
   exit 0
 fi
 
-# PATH prefix for cron environment (claude and bd aren't on default cron PATH)
-CRON_PATH="PATH=$HOME/.toolbox/bin:$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
+# PATH for cron environment — expand $HOME now (cron doesn't expand variables in env lines)
+# The PATH line is its own entry without the marker (grep -v would corrupt it)
+CRON_PATH_LINE="PATH=$HOME/.toolbox/bin:$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
 
 # Cron schedule:
 #   Dispatcher: every 10 minutes (at :00, :10, :20, :30, :40, :50)
@@ -42,11 +43,14 @@ DISPATCH_CRON="*/10 * * * * $SCRIPTS_DIR/dispatch-ready-specs.sh >> $LOG_DIR/dis
 REVIEW_CRON="7,22,37,52 * * * * $SCRIPTS_DIR/review-branches.sh >> $LOG_DIR/review.log 2>&1 $CRON_MARKER"
 CLEANUP_CRON="3 */6 * * * $SCRIPTS_DIR/cleanup-worktrees.sh >> $LOG_DIR/cleanup.log 2>&1 $CRON_MARKER"
 
-# Remove old pipeline entries, keep everything else
+# Remove old pipeline entries (including any old PATH line with marker), keep everything else
 EXISTING=$(crontab -l 2>/dev/null | grep -v "$CRON_MARKER" || true)
 
-# Build new crontab with PATH at the top
-NEW_CRONTAB="$CRON_PATH $CRON_MARKER
+# Also remove any bare PATH line we previously installed (identified by the exact expanded path)
+EXISTING=$(echo "$EXISTING" | grep -v "^PATH=.*\.toolbox/bin" || true)
+
+# Build new crontab: PATH line first (no marker — it's a cron env assignment, not a job)
+NEW_CRONTAB="$CRON_PATH_LINE
 $EXISTING
 $DISPATCH_CRON
 $REVIEW_CRON
