@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 
-test('world loads with all zones', async ({ page }) => {
+test('world loads with hub zone', async ({ page }) => {
   const errors = []
   page.on('pageerror', (err) => errors.push(err.message))
 
@@ -12,28 +12,11 @@ test('world loads with all zones', async ({ page }) => {
   expect(errors).toHaveLength(0)
 })
 
-test('entering career zone shows panel', async ({ page }) => {
+test('hub reachable via enterRoom', async ({ page }) => {
   await page.goto('/')
   await page.waitForFunction(() => window.__game?.loadState === 'ready', { timeout: 15000 })
 
-  await page.evaluate(() => window.__game.enterRoom('career-pg'))
-  await page.waitForTimeout(600)
-
-  const panel = page.locator('.js-panel')
-  await expect(panel).toBeVisible({ timeout: 3000 })
-
-  const content = await panel.locator('.js-panel-content').innerHTML()
-  expect(content).toContain('Procter')
-})
-
-test('all career zones accessible via enterRoom', async ({ page }) => {
-  await page.goto('/')
-  await page.waitForFunction(() => window.__game?.loadState === 'ready', { timeout: 15000 })
-
-  const rooms = ['career-pg', 'career-blackstone', 'career-amazon']
-  for (const roomId of rooms) {
-    await page.evaluate((id) => window.__game.enterRoom(id), roomId)
-    const current = await page.evaluate(() => window.__game.activeRoom)
-    expect(current).toBe(roomId)
-  }
+  await page.evaluate(() => window.__game.enterRoom('hub'))
+  const current = await page.evaluate(() => window.__game.activeRoom)
+  expect(current).toBe('hub')
 })

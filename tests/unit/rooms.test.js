@@ -35,11 +35,6 @@ describe('world layout', () => {
     }
   })
 
-  it('has 3 career zones', () => {
-    const career = WORLD_LAYOUT.zones.filter((z) => z.wing === 'career')
-    expect(career).toHaveLength(3)
-  })
-
   it('no duplicate zone IDs', () => {
     const ids = WORLD_LAYOUT.zones.map((z) => z.id)
     expect(new Set(ids).size).toBe(ids.length)

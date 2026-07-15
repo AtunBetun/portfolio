@@ -57,7 +57,6 @@ export default class World {
     floor.position.y = -0.01
     floor.receiveShadow = true
     this.group.add(floor)
-
   }
 
   buildZones() {
@@ -113,7 +112,6 @@ export default class World {
       zoneGroup.add(lock)
     }
   }
-
 
   buildBoundaryWalls() {
     if (!this.game.physics) return
