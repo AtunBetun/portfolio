@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { OutlineEffect } from 'three/examples/jsm/effects/OutlineEffect.js'
 import Game from './Game.js'
 
 export default class Rendering {
@@ -7,6 +8,7 @@ export default class Rendering {
     this.canvas = this.game.canvas
     this.scene = this.game.scene
     this.renderer = null
+    this.outlineEffect = null
   }
 
   async init() {
@@ -19,11 +21,19 @@ export default class Rendering {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.renderer.shadowMap.enabled = true
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping
+    this.renderer.toneMappingExposure = 1.2
+
+    this.outlineEffect = new OutlineEffect(this.renderer, {
+      defaultThickness: 0.003,
+      defaultColor: [0, 0, 0],
+      defaultAlpha: 1.0
+    })
 
     this.game.ticker.events.on(
       'tick',
       () => {
-        this.renderer.render(this.scene, this.game.camera.instance)
+        this.outlineEffect.render(this.scene, this.game.camera.instance)
       },
       998
     )
