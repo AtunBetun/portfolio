@@ -1,5 +1,7 @@
 import * as THREE from 'three'
 import Game from './Game.js'
+import { toon } from './Rendering/ToonMaterials.js'
+import { PALETTE } from './Rendering/Palette.js'
 
 export default class Player {
   constructor() {
@@ -24,21 +26,40 @@ export default class Player {
   }
 
   createMesh() {
-    const geometry = new THREE.OctahedronGeometry(0.3, 0)
-    const material = new THREE.MeshStandardMaterial({
-      color: 0xf0f0f0,
-      flatShading: true,
-      emissive: 0x00ff41,
-      emissiveIntensity: 0.1
-    })
-    const mesh = new THREE.Mesh(geometry, material)
-    mesh.position.set(0, 0.3, 0)
-    mesh.castShadow = true
-    return mesh
+    const group = new THREE.Group()
+
+    const bodyGeo = new THREE.CapsuleGeometry(0.15, 0.3, 4, 8)
+    const body = new THREE.Mesh(bodyGeo, toon('playerShirt'))
+    body.position.y = 0.35
+    body.castShadow = true
+    group.add(body)
+
+    const headGeo = new THREE.SphereGeometry(0.13, 8, 6)
+    const head = new THREE.Mesh(headGeo, toon('skin'))
+    head.position.y = 0.7
+    head.castShadow = true
+    group.add(head)
+
+    const hairGeo = new THREE.SphereGeometry(0.14, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2)
+    const hair = new THREE.Mesh(hairGeo, toon('playerHair'))
+    hair.position.y = 0.72
+    group.add(hair)
+
+    const legGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.25, 6)
+    const legMat = toon('playerPants')
+    const leftLeg = new THREE.Mesh(legGeo, legMat)
+    leftLeg.position.set(-0.08, 0.12, 0)
+    group.add(leftLeg)
+    const rightLeg = new THREE.Mesh(legGeo, legMat)
+    rightLeg.position.set(0.08, 0.12, 0)
+    group.add(rightLeg)
+
+    group.position.set(0, 0.0, 0)
+    return group
   }
 
   createTrail() {
-    const light = new THREE.PointLight(0x00ff41, 1, 3)
+    const light = new THREE.PointLight(PALETTE.accent, 0.6, 2.5)
     light.position.copy(this.mesh.position)
     light.position.y = 0.1
     return light
