@@ -33,7 +33,6 @@ export default class World {
 
     this.buildFloor()
     this.buildZones()
-    this.buildPaths()
     this.buildBoundaryWalls()
     this.countCollectibles()
 
@@ -59,18 +58,6 @@ export default class World {
     floor.receiveShadow = true
     this.group.add(floor)
 
-    const pathMat = toonFlat('path')
-    for (let i = -20; i <= 20; i += 4) {
-      const hGeo = new THREE.BoxGeometry(size, 0.01, 0.3)
-      const h = new THREE.Mesh(hGeo, pathMat)
-      h.position.set(0, 0.005, i)
-      this.group.add(h)
-
-      const vGeo = new THREE.BoxGeometry(0.3, 0.01, size)
-      const v = new THREE.Mesh(vGeo, pathMat)
-      v.position.set(i, 0.005, 0)
-      this.group.add(v)
-    }
   }
 
   buildZones() {
@@ -127,24 +114,6 @@ export default class World {
     }
   }
 
-  buildPaths() {
-    const hub = WORLD_LAYOUT.zones.find((z) => z.id === 'hub')
-    const pathMat = toon('pathDark')
-
-    for (const zone of WORLD_LAYOUT.zones) {
-      if (zone.id === 'hub') continue
-      const dx = zone.position.x - hub.position.x
-      const dz = zone.position.z - hub.position.z
-      const length = Math.sqrt(dx * dx + dz * dz)
-      const angle = Math.atan2(dx, dz)
-
-      const stripGeo = new THREE.BoxGeometry(0.8, 0.03, length)
-      const strip = new THREE.Mesh(stripGeo, pathMat)
-      strip.position.set(hub.position.x + dx / 2, 0.015, hub.position.z + dz / 2)
-      strip.rotation.y = angle
-      this.group.add(strip)
-    }
-  }
 
   buildBoundaryWalls() {
     if (!this.game.physics) return
