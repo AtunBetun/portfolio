@@ -1,9 +1,10 @@
 import * as THREE from 'three'
 import Game from '../Game.js'
 import Door from './Door.js'
+import Collectible from './Collectible.js'
 
 export default class Room {
-  constructor(config) {
+  constructor(config, options = {}) {
     this.game = Game.getInstance()
     this.config = config
     this.id = config.id
@@ -15,6 +16,18 @@ export default class Room {
 
     this.buildGeometry()
     this.buildDoors()
+
+    if (options.buildProps) {
+      options.buildProps(this.group)
+    }
+
+    if (options.collectibles) {
+      for (const c of options.collectibles) {
+        const collectible = new Collectible(c)
+        this.collectibles.push(collectible)
+        this.group.add(collectible.group)
+      }
+    }
   }
 
   buildGeometry() {
@@ -75,6 +88,13 @@ export default class Room {
 
   getSpawn() {
     return this.config.spawn
+  }
+
+  update(elapsed, playerPos) {
+    for (const c of this.collectibles) {
+      c.update(elapsed)
+      c.checkPickup(playerPos)
+    }
   }
 
   checkDoorCollisions(playerPos) {

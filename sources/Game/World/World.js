@@ -2,6 +2,18 @@ import Game from '../Game.js'
 import Room from './Room.js'
 import { ROOM_GRAPH } from '../../../data/rooms.js'
 import { CAREER_CONTENT } from '../../../data/content-map.js'
+import { buildPGProps, getPGCollectibles } from './Rooms/PGRoom.js'
+import { buildBlackstoneProps, getBlackstoneCollectibles } from './Rooms/BlackstoneRoom.js'
+import { buildAmazonProps, getAmazonCollectibles } from './Rooms/AmazonRoom.js'
+
+const ROOM_BUILDERS = {
+  'career-pg': { buildProps: buildPGProps, collectibles: getPGCollectibles() },
+  'career-blackstone': {
+    buildProps: buildBlackstoneProps,
+    collectibles: getBlackstoneCollectibles()
+  },
+  'career-amazon': { buildProps: buildAmazonProps, collectibles: getAmazonCollectibles() }
+}
 
 export default class World {
   constructor() {
@@ -14,17 +26,28 @@ export default class World {
     this.transitioning = false
 
     this.buildRooms()
+    this.countCollectibles()
 
     const startRoom = this.game.debug.spawnRoom || 'hub'
     this.enterRoom(startRoom)
 
-    this.game.ticker.events.on('tick', () => this.update(), 5)
+    this.game.ticker.events.on('tick', (delta, elapsed) => this.update(delta, elapsed), 5)
   }
 
   buildRooms() {
     for (const [id, config] of Object.entries(ROOM_GRAPH)) {
-      this.rooms[id] = new Room(config)
+      const options = ROOM_BUILDERS[id] || {}
+      this.rooms[id] = new Room(config, options)
     }
+  }
+
+  countCollectibles() {
+    let total = 0
+    for (const room of Object.values(this.rooms)) {
+      total += room.collectibles.length
+    }
+    this.totalCollectibles = total
+    this.game.tracker.setTotal(total)
   }
 
   enterRoom(roomId) {
@@ -52,12 +75,13 @@ export default class World {
     }
   }
 
-  update() {
+  update(_delta, elapsed) {
     if (!this.activeRoom || this.transitioning) return
 
     const playerPos = this.game.player.mesh.position
-    const door = this.activeRoom.checkDoorCollisions(playerPos)
+    this.activeRoom.update(elapsed, playerPos)
 
+    const door = this.activeRoom.checkDoorCollisions(playerPos)
     if (door && !door.locked && door.target) {
       this.transition(door.target)
     }
