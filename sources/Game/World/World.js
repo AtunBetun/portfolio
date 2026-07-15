@@ -6,6 +6,7 @@ import Water from './Water.js'
 import { WORLD_LAYOUT } from '../../../data/rooms.js'
 import { buildHubProps } from './Rooms/HubRoom.js'
 import { toonFlat } from '../Rendering/ToonMaterials.js'
+// TODO(portfolio-k3u): import { CayucoRace } from '../Minigames/CayucoRace/RaceController.js'
 
 export default class World {
   constructor() {
@@ -55,6 +56,11 @@ export default class World {
       this.game.player.teleport(0, 2, 5)
       this.activeRoomId = 'hub'
     }
+  }
+
+  // TODO(portfolio-k3u): Wire cayuco interaction to this.startMinigame('cayuco-race')
+  startMinigame(id) {
+    console.log('Minigame not yet wired:', id)
   }
 
   update(elapsed) {

@@ -9,6 +9,8 @@ export function buildHubProps(group, physics) {
   buildRocks(group, physics)
   buildCrates(group, physics)
   buildAmbientParticles(group)
+  buildCREBABillboard(group)
+  buildDockedCayuco(group)
 }
 
 function buildCenterPlatform(group) {
@@ -159,6 +161,53 @@ function buildCrates(group, physics) {
       crate.userData.body = body
     }
   }
+}
+
+function buildCREBABillboard(group) {
+  const billboard = new THREE.Group()
+  billboard.position.set(-8, 0, -12)
+
+  const postGeo = new THREE.CylinderGeometry(0.1, 0.1, 2, 8)
+  const post = new THREE.Mesh(postGeo, toon('wood'))
+  post.position.y = 1
+  post.castShadow = true
+  billboard.add(post)
+
+  const boardGeo = new THREE.BoxGeometry(3, 2, 0.1)
+  const board = new THREE.Mesh(boardGeo, toon('white'))
+  board.position.y = 3
+  board.castShadow = true
+  billboard.add(board)
+
+  // TODO(portfolio-k3u): Load CREBA logo texture when hub rework merges
+  const labelGeo = new THREE.PlaneGeometry(2, 0.6)
+  const label = new THREE.Mesh(labelGeo, toon('accent'))
+  label.position.set(0, 3, 0.06)
+  billboard.add(label)
+
+  group.add(billboard)
+}
+
+function buildDockedCayuco(group) {
+  const cayuco = new THREE.Group()
+  cayuco.position.set(-6, -0.2, -13)
+
+  const hullGeo = new THREE.CapsuleGeometry(0.15, 1.5, 4, 8)
+  const hull = new THREE.Mesh(hullGeo, toon('wood'))
+  hull.rotation.z = Math.PI / 2
+  hull.castShadow = true
+  cayuco.add(hull)
+
+  // TODO(portfolio-k3u): Wire interaction trigger to start CayucoRace when hub has proximity detection
+  const indicatorGeo = new THREE.SphereGeometry(0.15, 8, 6)
+  const indicator = new THREE.Mesh(
+    indicatorGeo,
+    toon('accent', { transparent: true, opacity: 0.6 })
+  )
+  indicator.position.y = 1
+  cayuco.add(indicator)
+
+  group.add(cayuco)
 }
 
 function buildAmbientParticles(group) {
