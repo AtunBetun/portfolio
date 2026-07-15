@@ -6,13 +6,17 @@ export default class Camera {
     this.game = Game.getInstance()
     this.target = new THREE.Vector3(0, 0, 0)
     this.lookTarget = new THREE.Vector3(0, 0, 0)
-    this.currentPos = new THREE.Vector3(0, 5, 10)
-    this.posLerp = 0.06
-    this.lookLerp = 0.1
+    this.currentPos = new THREE.Vector3(0, 4, 12)
+    this.posLerp = 0.03
+    this.lookLerp = 0.06
 
-    this.distance = 10
-    this.height = 5
+    this.distance = 12
+    this.height = 4
     this.lookAhead = 2
+
+    this.idleSettleLerp = 0.01
+    this.elapsed = 0
+    this.playerMoving = false
 
     this.instance = new THREE.PerspectiveCamera(
       55,
@@ -23,24 +27,28 @@ export default class Camera {
     this.instance.position.copy(this.currentPos)
     this.instance.lookAt(0, 0, 0)
 
-    this.game.ticker.events.on('tick', () => this.update(), 7)
+    this.game.ticker.events.on('tick', (delta) => this.update(delta), 7)
     window.addEventListener('resize', () => this.resize())
   }
 
-  update() {
+  update(delta) {
+    this.elapsed += delta
+
+    const dir = this.direction
     const desired = new THREE.Vector3(
-      this.target.x - this.direction.x * this.distance,
-      this.target.y + this.height,
-      this.target.z - this.direction.z * this.distance
+      this.target.x - dir.x * this.distance,
+      this.target.y + this.height + Math.sin(this.elapsed * 1.2) * 0.05,
+      this.target.z - dir.z * this.distance
     )
 
-    this.currentPos.lerp(desired, this.posLerp)
+    const lerpSpeed = this.playerMoving ? this.posLerp : this.posLerp * 0.6
+    this.currentPos.lerp(desired, lerpSpeed)
     this.instance.position.copy(this.currentPos)
 
     const lookAt = new THREE.Vector3(
-      this.target.x + this.direction.x * this.lookAhead,
-      this.target.y + 1,
-      this.target.z + this.direction.z * this.lookAhead
+      this.target.x + dir.x * this.lookAhead,
+      this.target.y + 1.2,
+      this.target.z + dir.z * this.lookAhead
     )
     this.lookTarget.lerp(lookAt, this.lookLerp)
     this.instance.lookAt(this.lookTarget)
@@ -49,7 +57,10 @@ export default class Camera {
   follow(position, direction) {
     this.target.copy(position)
     if (direction && direction.lengthSq() > 0.01) {
+      this.playerMoving = true
       this.direction = direction.clone().normalize()
+    } else {
+      this.playerMoving = false
     }
   }
 
@@ -58,7 +69,12 @@ export default class Camera {
   }
 
   set direction(val) {
-    this._direction = val
+    if (!this._direction) {
+      this._direction = val
+      return
+    }
+    this._direction.lerp(val, this.playerMoving ? 0.04 : this.idleSettleLerp)
+    this._direction.normalize()
   }
 
   resize() {

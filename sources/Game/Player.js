@@ -84,18 +84,30 @@ export default class Player {
     const touch = this.game.touch
     this.elapsed += delta
 
-    const input = new THREE.Vector3()
+    const raw = new THREE.Vector3()
     if (touch && touch.active && (touch.direction.x !== 0 || touch.direction.z !== 0)) {
-      input.x = touch.direction.x
-      input.z = touch.direction.z
+      raw.x = touch.direction.x
+      raw.z = touch.direction.z
     } else {
-      if (kb.up) input.z -= 1
-      if (kb.down) input.z += 1
-      if (kb.left) input.x -= 1
-      if (kb.right) input.x += 1
+      if (kb.up) raw.z -= 1
+      if (kb.down) raw.z += 1
+      if (kb.left) raw.x -= 1
+      if (kb.right) raw.x += 1
     }
 
-    if (input.lengthSq() > 0) input.normalize()
+    if (raw.lengthSq() > 0) raw.normalize()
+
+    const camForward = new THREE.Vector3()
+    this.game.camera.instance.getWorldDirection(camForward)
+    camForward.y = 0
+    camForward.normalize()
+
+    const camRight = new THREE.Vector3()
+    camRight.crossVectors(camForward, new THREE.Vector3(0, 1, 0)).normalize()
+
+    const input = new THREE.Vector3()
+    input.addScaledVector(camRight, raw.x)
+    input.addScaledVector(camForward, -raw.z)
 
     if (this.body) {
       const controller = this.game.physics.characterController
@@ -147,7 +159,7 @@ export default class Player {
     this.animateLegs(input.lengthSq() > 0, delta)
 
     this.trail.position.set(this.mesh.position.x, 0.1, this.mesh.position.z)
-    this.game.camera.follow(this.mesh.position, this.direction)
+    this.game.camera.follow(this.mesh.position, input.lengthSq() > 0 ? this.direction : null)
   }
 
   animateLegs(moving) {
