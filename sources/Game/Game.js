@@ -79,7 +79,7 @@ export default class Game {
     const directional = new THREE.DirectionalLight(0xffffff, 0.8)
     directional.position.set(5, 10, 5)
     directional.castShadow = true
-    directional.shadow.mapSize.set(1024, 1024)
+    directional.shadow.mapSize.set(512, 512)
     directional.shadow.camera.near = 0.1
     directional.shadow.camera.far = 50
     directional.shadow.camera.left = -15

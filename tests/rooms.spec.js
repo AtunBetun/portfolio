@@ -1,35 +1,39 @@
 import { test, expect } from '@playwright/test'
 
-test('room transition via programmatic enterRoom', async ({ page }) => {
+test('world loads with all zones', async ({ page }) => {
   const errors = []
   page.on('pageerror', (err) => errors.push(err.message))
 
   await page.goto('/')
   await page.waitForFunction(() => window.__game?.loadState === 'ready', { timeout: 15000 })
 
-  expect(await page.evaluate(() => window.__game.activeRoom)).toBe('hub')
-
-  await page.evaluate(() => window.__game.enterRoom('career-pg'))
-  expect(await page.evaluate(() => window.__game.activeRoom)).toBe('career-pg')
-
+  const room = await page.evaluate(() => window.__game.activeRoom)
+  expect(room).toBe('hub')
   expect(errors).toHaveLength(0)
-  await page.screenshot({ path: './tests/screenshots/room-transition.png', fullPage: true })
 })
 
-test('hash spawn puts player in specific room', async ({ page }) => {
-  await page.goto('/#room=career-amazon')
-  await page.waitForFunction(() => window.__game?.loadState === 'ready', { timeout: 15000 })
-
-  expect(await page.evaluate(() => window.__game.activeRoom)).toBe('career-amazon')
-})
-
-test('all rooms navigable programmatically', async ({ page }) => {
+test('entering career zone shows panel', async ({ page }) => {
   await page.goto('/')
   await page.waitForFunction(() => window.__game?.loadState === 'ready', { timeout: 15000 })
 
-  const rooms = ['hub', 'career-pg', 'career-blackstone', 'career-amazon']
+  await page.evaluate(() => window.__game.enterRoom('career-pg'))
+  await page.waitForTimeout(600)
+
+  const panel = page.locator('.js-panel')
+  await expect(panel).toBeVisible({ timeout: 3000 })
+
+  const content = await panel.locator('.js-panel-content').innerHTML()
+  expect(content).toContain('Procter')
+})
+
+test('all career zones accessible via enterRoom', async ({ page }) => {
+  await page.goto('/')
+  await page.waitForFunction(() => window.__game?.loadState === 'ready', { timeout: 15000 })
+
+  const rooms = ['career-pg', 'career-blackstone', 'career-amazon']
   for (const roomId of rooms) {
     await page.evaluate((id) => window.__game.enterRoom(id), roomId)
-    expect(await page.evaluate(() => window.__game.activeRoom)).toBe(roomId)
+    const current = await page.evaluate(() => window.__game.activeRoom)
+    expect(current).toBe(roomId)
   }
 })

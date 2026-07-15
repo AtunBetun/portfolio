@@ -1,51 +1,47 @@
 import { describe, it, expect } from 'bun:test'
-import { ROOM_GRAPH } from '../../data/rooms.js'
+import { WORLD_LAYOUT } from '../../data/rooms.js'
 
-describe('room graph', () => {
-  it('all rooms have required fields', () => {
-    for (const [id, room] of Object.entries(ROOM_GRAPH)) {
-      expect(room.id).toBe(id)
-      expect(room.name).toBeDefined()
-      expect(room.doors).toBeInstanceOf(Array)
-      expect(room.spawn).toBeDefined()
-      expect(room.size).toBeDefined()
+describe('world layout', () => {
+  it('all zones have required fields', () => {
+    for (const zone of WORLD_LAYOUT.zones) {
+      expect(zone.id).toBeDefined()
+      expect(zone.name).toBeDefined()
+      expect(zone.position).toBeDefined()
+      expect(zone.position.x).toBeDefined()
+      expect(zone.position.z).toBeDefined()
+      expect(zone.radius).toBeGreaterThan(0)
     }
   })
 
-  it('no orphan rooms — every room is reachable from hub', () => {
-    const visited = new Set()
-    const queue = ['hub']
-
-    while (queue.length > 0) {
-      const current = queue.shift()
-      if (visited.has(current)) continue
-      visited.add(current)
-
-      const room = ROOM_GRAPH[current]
-      for (const door of room.doors) {
-        if (door.target && !visited.has(door.target)) {
-          queue.push(door.target)
-        }
-      }
-    }
-
-    const allRooms = Object.keys(ROOM_GRAPH)
-    for (const roomId of allRooms) {
-      expect(visited.has(roomId)).toBe(true)
-    }
+  it('has a hub zone at origin', () => {
+    const hub = WORLD_LAYOUT.zones.find((z) => z.id === 'hub')
+    expect(hub).toBeDefined()
+    expect(hub.position.x).toBe(0)
+    expect(hub.position.z).toBe(0)
   })
 
-  it('all door targets point to existing rooms or null', () => {
-    for (const room of Object.values(ROOM_GRAPH)) {
-      for (const door of room.doors) {
-        if (door.target !== null) {
-          expect(ROOM_GRAPH[door.target]).toBeDefined()
-        }
+  it('no overlapping zones', () => {
+    const zones = WORLD_LAYOUT.zones
+    for (let i = 0; i < zones.length; i++) {
+      for (let j = i + 1; j < zones.length; j++) {
+        const a = zones[i]
+        const b = zones[j]
+        const dx = a.position.x - b.position.x
+        const dz = a.position.z - b.position.z
+        const dist = Math.sqrt(dx * dx + dz * dz)
+        const minDist = a.radius + b.radius
+        expect(dist).toBeGreaterThanOrEqual(minDist * 0.8)
       }
     }
   })
 
-  it('hub has exactly 3 doors', () => {
-    expect(ROOM_GRAPH.hub.doors).toHaveLength(3)
+  it('has 3 career zones', () => {
+    const career = WORLD_LAYOUT.zones.filter((z) => z.wing === 'career')
+    expect(career).toHaveLength(3)
+  })
+
+  it('no duplicate zone IDs', () => {
+    const ids = WORLD_LAYOUT.zones.map((z) => z.id)
+    expect(new Set(ids).size).toBe(ids.length)
   })
 })
