@@ -13,6 +13,8 @@ import Tracker from './UI/Tracker.js'
 import Controls from './UI/Controls.js'
 import Loading from './UI/Loading.js'
 import Debug from './Debug.js'
+import { createToonLights } from './Rendering/ToonLights.js'
+import { createSkyDome } from './Rendering/SkyDome.js'
 
 export default class Game {
   static instance = null
@@ -28,7 +30,8 @@ export default class Game {
     this.loadState = 'loading'
     this.canvas = document.querySelector('.js-canvas')
     this.scene = new THREE.Scene()
-    this.scene.background = new THREE.Color(0x0a0a0a)
+    this.scene.background = new THREE.Color(0x87ceeb)
+    this.scene.fog = new THREE.Fog(0x87ceeb, 40, 70)
 
     this.player = null
     this.world = null
@@ -73,19 +76,8 @@ export default class Game {
   }
 
   setupLighting() {
-    const ambient = new THREE.AmbientLight(0xffffff, 0.4)
-    this.scene.add(ambient)
-
-    const directional = new THREE.DirectionalLight(0xffffff, 0.8)
-    directional.position.set(5, 10, 5)
-    directional.castShadow = true
-    directional.shadow.mapSize.set(512, 512)
-    directional.shadow.camera.near = 0.1
-    directional.shadow.camera.far = 50
-    directional.shadow.camera.left = -15
-    directional.shadow.camera.right = 15
-    directional.shadow.camera.top = 15
-    directional.shadow.camera.bottom = -15
-    this.scene.add(directional)
+    this.lights = createToonLights(this.scene)
+    const skyDome = createSkyDome()
+    this.scene.add(skyDome)
   }
 }
