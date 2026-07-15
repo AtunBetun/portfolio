@@ -33,7 +33,7 @@ export default class Debug {
       },
       teleportPlayer(x, y, z) {
         const p = Game.getInstance().player
-        if (p) p.mesh.position.set(x, y, z)
+        if (p) p.teleport(x, y, z)
       },
       enterRoom(roomId) {
         const w = Game.getInstance().world

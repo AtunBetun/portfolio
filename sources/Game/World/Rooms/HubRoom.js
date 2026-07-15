@@ -2,139 +2,178 @@ import * as THREE from 'three'
 import { toon } from '../../Rendering/ToonMaterials.js'
 import { PALETTE } from '../../Rendering/Palette.js'
 
-export function buildHubProps(group) {
+export function buildHubProps(group, physics) {
   buildCenterPlatform(group)
-  buildPathways(group)
-  buildNamePlate(group)
-  buildCornerDecor(group)
+  buildTrees(group)
+  buildBushes(group)
+  buildRocks(group, physics)
+  buildCrates(group, physics)
   buildAmbientParticles(group)
 }
 
 function buildCenterPlatform(group) {
-  const baseGeo = new THREE.CylinderGeometry(2, 2.2, 0.15, 12)
+  const baseGeo = new THREE.CylinderGeometry(4, 4.3, 0.2, 16)
   const base = new THREE.Mesh(baseGeo, toon('stone'))
-  base.position.y = 0.08
+  base.position.y = 0.1
   base.receiveShadow = true
   group.add(base)
 
-  const ringGeo = new THREE.TorusGeometry(2.1, 0.06, 8, 24)
+  const ringGeo = new THREE.TorusGeometry(4.2, 0.08, 8, 32)
   const ring = new THREE.Mesh(ringGeo, toon('wood'))
   ring.rotation.x = -Math.PI / 2
-  ring.position.y = 0.16
+  ring.position.y = 0.21
   group.add(ring)
-
-  const innerRingGeo = new THREE.TorusGeometry(1.2, 0.03, 8, 20)
-  const innerRing = new THREE.Mesh(innerRingGeo, toon('woodDark'))
-  innerRing.rotation.x = -Math.PI / 2
-  innerRing.position.y = 0.17
-  group.add(innerRing)
 }
 
-function buildPathways(group) {
-  const pathMat = toon('path')
-
-  const paths = [
-    { from: [0, 0], to: [0, -4], label: 'CAREER' },
-    { from: [0, 0], to: [-4, 0], label: 'STORY' },
-    { from: [0, 0], to: [4, 0], label: 'PASSIONS' }
-  ]
-
-  for (const path of paths) {
-    const dx = path.to[0] - path.from[0]
-    const dz = path.to[1] - path.from[1]
-    const length = Math.sqrt(dx * dx + dz * dz)
-    const angle = Math.atan2(dx, dz)
-
-    const stripGeo = new THREE.BoxGeometry(0.6, 0.03, length)
-    const strip = new THREE.Mesh(stripGeo, pathMat)
-    strip.position.set((path.from[0] + path.to[0]) / 2, 0.02, (path.from[1] + path.to[1]) / 2)
-    strip.rotation.y = angle
-    group.add(strip)
-
-    const dotCount = Math.floor(length / 1.0)
-    const dotGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.02, 8)
-    const dotMat = toon('pathDark')
-    for (let i = 1; i <= dotCount; i++) {
-      const t = i / (dotCount + 1)
-      const dot = new THREE.Mesh(dotGeo, dotMat)
-      dot.position.set(path.from[0] + dx * t, 0.04, path.from[1] + dz * t)
-      group.add(dot)
-    }
-  }
-}
-
-function buildNamePlate(group) {
-  const plateGeo = new THREE.BoxGeometry(3, 0.1, 1.2)
-  const plate = new THREE.Mesh(plateGeo, toon('wood'))
-  plate.position.set(0, 0.05, 3)
-  plate.castShadow = true
-  group.add(plate)
-
-  const postGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.6, 6)
-  const postMat = toon('woodDark')
-  const leftPost = new THREE.Mesh(postGeo, postMat)
-  leftPost.position.set(-1.3, 0.3, 3)
-  group.add(leftPost)
-  const rightPost = new THREE.Mesh(postGeo, postMat)
-  rightPost.position.set(1.3, 0.3, 3)
-  group.add(rightPost)
-}
-
-function buildCornerDecor(group) {
+function buildTrees(group) {
   const positions = [
-    [-4, -4],
-    [4, -4],
-    [-4, 4],
-    [4, 4]
+    [-10, 6],
+    [10, 6],
+    [-8, -8],
+    [8, -8],
+    [-14, 0],
+    [14, 0],
+    [-12, 10],
+    [12, -10]
   ]
 
   for (const [x, z] of positions) {
-    const bushGeo = new THREE.SphereGeometry(0.5, 6, 5)
+    const tree = createTree()
+    tree.position.set(x, 0, z)
+    tree.rotation.y = x * z * 0.1
+    group.add(tree)
+  }
+}
+
+function createTree() {
+  const tree = new THREE.Group()
+
+  const trunkGeo = new THREE.CylinderGeometry(0.15, 0.2, 1.5, 6)
+  const trunk = new THREE.Mesh(trunkGeo, toon('wood'))
+  trunk.position.y = 0.75
+  trunk.castShadow = true
+  tree.add(trunk)
+
+  const leavesGeo = new THREE.SphereGeometry(1.0, 6, 5)
+  const leaves = new THREE.Mesh(leavesGeo, toon('grassDark'))
+  leaves.position.y = 2.0
+  leaves.scale.y = 0.8
+  leaves.castShadow = true
+  tree.add(leaves)
+
+  const topGeo = new THREE.SphereGeometry(0.6, 5, 4)
+  const top = new THREE.Mesh(topGeo, toon('grass'))
+  top.position.y = 2.6
+  tree.add(top)
+
+  return tree
+}
+
+function buildBushes(group) {
+  const positions = [
+    [-6, 4],
+    [6, 4],
+    [-5, -5],
+    [5, -5],
+    [-3, 8],
+    [3, -8],
+    [7, 2],
+    [-7, -2]
+  ]
+
+  for (const [x, z] of positions) {
+    const bushGeo = new THREE.SphereGeometry(0.5 + Math.random() * 0.3, 6, 5)
     const bush = new THREE.Mesh(bushGeo, toon('grassDark'))
     bush.position.set(x, 0.3, z)
     bush.scale.y = 0.7
     bush.castShadow = true
     group.add(bush)
 
-    const flowerGeo = new THREE.SphereGeometry(0.1, 5, 4)
-    const flowerColors = [PALETTE.passionsPink, PALETTE.accent, PALETTE.pgBlue]
-    const flower = new THREE.Mesh(flowerGeo, toon(flowerColors[Math.floor(Math.abs(x + z)) % 3]))
-    flower.position.set(x + 0.3, 0.6, z + 0.2)
-    group.add(flower)
+    if (Math.random() > 0.5) {
+      const flowerGeo = new THREE.SphereGeometry(0.08, 5, 4)
+      const flowerColors = [PALETTE.accent, PALETTE.letterColor, PALETTE.letterAlt]
+      const flower = new THREE.Mesh(flowerGeo, toon(flowerColors[Math.floor(Math.random() * 3)]))
+      flower.position.set(x + 0.3, 0.55, z + 0.2)
+      group.add(flower)
+    }
   }
+}
 
-  const rockGeo = new THREE.IcosahedronGeometry(0.3, 0)
-  const rockMat = toon('stone')
-  const rockPositions = [
-    [-3.5, 2],
-    [3.5, 2],
-    [-3.5, -2],
-    [3.5, -2],
-    [-2, 3.5],
-    [2, 3.5],
-    [-2, -3.5],
-    [2, -3.5]
+function buildRocks(group, physics) {
+  const positions = [
+    [-4, 10],
+    [4, 10],
+    [-11, -5],
+    [11, -5],
+    [-9, 8],
+    [9, -8],
+    [0, -12],
+    [13, 3]
   ]
-  for (const [x, z] of rockPositions) {
-    const rock = new THREE.Mesh(rockGeo, rockMat)
-    rock.position.set(x, 0.15, z)
-    rock.rotation.y = (x * 7 + z * 13) % 6
+
+  const rockGeo = new THREE.IcosahedronGeometry(0.4, 0)
+
+  for (const [x, z] of positions) {
+    const rock = new THREE.Mesh(rockGeo, toon('stone'))
+    rock.position.set(x, 0.2, z)
+    rock.rotation.set(x * 0.5, z * 0.3, x * z * 0.1)
     rock.castShadow = true
     group.add(rock)
+
+    if (physics) {
+      const body = physics.createStaticBody(x, 0.2, z)
+      const desc = physics.RAPIER.ColliderDesc.ball(0.4).setFriction(0.5)
+      physics.createCollider(desc, body)
+    }
+  }
+}
+
+function buildCrates(group, physics) {
+  const positions = [
+    [-2, 6],
+    [2, 6],
+    [-3, -4],
+    [3, -4],
+    [0, 8]
+  ]
+
+  const crateGeo = new THREE.BoxGeometry(0.8, 0.8, 0.8)
+
+  for (const [x, z] of positions) {
+    const crate = new THREE.Mesh(crateGeo, toon('wood'))
+    crate.position.set(x, 0.4, z)
+    crate.castShadow = true
+    group.add(crate)
+
+    if (physics) {
+      const body = physics.createDynamicBody(x, 0.4, z, {
+        linearDamping: 3.0,
+        angularDamping: 2.0
+      })
+      const desc = physics.RAPIER.ColliderDesc.cuboid(0.4, 0.4, 0.4)
+        .setMass(1.5)
+        .setRestitution(0.1)
+        .setFriction(0.7)
+      physics.createCollider(desc, body)
+
+      crate.userData.body = body
+    }
   }
 }
 
 function buildAmbientParticles(group) {
-  const colors = [PALETTE.accent, PALETTE.passionsPink, PALETTE.pgBlue]
+  const colors = [PALETTE.accent, PALETTE.letterColor, PALETTE.letterAlt]
   const particleGeo = new THREE.SphereGeometry(0.04, 4, 3)
 
-  for (let i = 0; i < 20; i++) {
-    const x = (Math.random() - 0.5) * 8
-    const z = (Math.random() - 0.5) * 8
-    const y = 0.5 + Math.random() * 2
+  for (let i = 0; i < 30; i++) {
+    const x = (Math.random() - 0.5) * 20
+    const z = (Math.random() - 0.5) * 20
+    const y = 0.8 + Math.random() * 3
     const mat = toon(colors[i % 3])
     const particle = new THREE.Mesh(particleGeo, mat)
     particle.position.set(x, y, z)
+    particle.userData.baseY = y
+    particle.userData.phase = Math.random() * Math.PI * 2
     group.add(particle)
   }
 }

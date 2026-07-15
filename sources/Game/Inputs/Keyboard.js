@@ -39,6 +39,14 @@ export default class Keyboard {
     return this.isDown('KeyD') || this.isDown('ArrowRight')
   }
 
+  get jump() {
+    return this.isDown('Space')
+  }
+
+  get sprint() {
+    return this.isDown('ShiftLeft') || this.isDown('ShiftRight')
+  }
+
   lock() {
     this.locked = true
     this.keys = {}

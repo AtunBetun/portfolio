@@ -27,7 +27,7 @@ export default class Touch {
         zone,
         mode: 'semi',
         catchDistance: 80,
-        color: 'rgba(0, 255, 65, 0.4)',
+        color: 'rgba(255, 215, 0, 0.4)',
         size: 100
       })
 
@@ -41,6 +41,17 @@ export default class Touch {
       this.joystick.on('end', () => {
         this.direction.x = 0
         this.direction.z = 0
+      })
+
+      const jumpZone = document.createElement('div')
+      jumpZone.style.cssText =
+        'position:absolute;bottom:0;right:0;width:30%;height:40%;z-index:50;touch-action:none;'
+      document.querySelector('.game').appendChild(jumpZone)
+      jumpZone.addEventListener('touchstart', () => {
+        this.jumpPressed = true
+      })
+      jumpZone.addEventListener('touchend', () => {
+        this.jumpPressed = false
       })
     } catch (err) {
       console.warn('Touch controls failed to initialize:', err.message)

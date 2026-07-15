@@ -7,10 +7,10 @@
 }
 
 :root {
-  --color-bg: #0a0a0a;
-  --color-text: #f0f0f0;
-  --color-accent: #00ff41;
-  --color-panel-bg: rgba(10, 10, 10, 0.92);
+  --color-bg: #1a1a2e;
+  --color-text: #fff8f0;
+  --color-accent: #ffd700;
+  --color-panel-bg: rgba(26, 26, 46, 0.92);
   --color-panel-border: var(--color-accent);
 }
 

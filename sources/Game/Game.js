@@ -15,6 +15,7 @@ import Loading from './UI/Loading.js'
 import Debug from './Debug.js'
 import { createToonLights } from './Rendering/ToonLights.js'
 import { createSkyDome } from './Rendering/SkyDome.js'
+import Clouds from './Rendering/Clouds.js'
 
 export default class Game {
   static instance = null
@@ -30,8 +31,8 @@ export default class Game {
     this.loadState = 'loading'
     this.canvas = document.querySelector('.js-canvas')
     this.scene = new THREE.Scene()
-    this.scene.background = new THREE.Color(0x87ceeb)
-    this.scene.fog = new THREE.Fog(0x87ceeb, 40, 70)
+    this.scene.background = new THREE.Color(0x6ec6ff)
+    this.scene.fog = new THREE.Fog(0x6ec6ff, 30, 80)
 
     this.player = null
     this.world = null
@@ -79,5 +80,6 @@ export default class Game {
     this.lights = createToonLights(this.scene)
     const skyDome = createSkyDome()
     this.scene.add(skyDome)
+    this.clouds = new Clouds()
   }
 }
