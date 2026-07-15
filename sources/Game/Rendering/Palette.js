@@ -26,5 +26,10 @@ export const PALETTE = {
   playerBody: 0x3498db,
   playerHair: 0x4a3520,
   playerShirt: 0x48c774,
-  playerPants: 0x5a4a3a
+  playerPants: 0x5a4a3a,
+
+  sunlight: 0xfff0a0,
+  skyMid1: 0xd4eeaa,
+  skyMid2: 0x7eccf4,
+  skyZenith: 0x4aa3df
 }

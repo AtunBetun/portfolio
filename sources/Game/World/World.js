@@ -1,8 +1,8 @@
 import * as THREE from 'three'
 import Game from '../Game.js'
-// import Collectible from './Collectible.js'
 import PhysicsLetters from './PhysicsLetters.js'
 import Water from './Water.js'
+import BlobShadow from './BlobShadow.js'
 import { WORLD_LAYOUT } from '../../../data/rooms.js'
 import { buildHubProps } from './Rooms/HubRoom.js'
 import { toonFlat } from '../Rendering/ToonMaterials.js'
@@ -15,6 +15,7 @@ export default class World {
     this.activeRoomId = 'hub'
     this.collectiblesCollected = 0
     this.totalCollectibles = 0
+    this.blobShadows = []
 
     this.buildFloor()
     this.buildBoundaryWalls()
@@ -25,8 +26,24 @@ export default class World {
 
     this.water = new Water(this.group)
 
+    this.setupBlobShadows()
+
     this.game.scene.add(this.group)
     this.game.ticker.events.on('tick', (_delta, elapsed) => this.update(elapsed), 5)
+  }
+
+  setupBlobShadows() {
+    const playerShadow = new BlobShadow(this.game.player.mesh)
+    this.group.add(playerShadow.mesh)
+    this.blobShadows.push(playerShadow)
+
+    this.group.traverse((child) => {
+      if (child.userData.body && child.isMesh) {
+        const shadow = new BlobShadow(child)
+        this.group.add(shadow.mesh)
+        this.blobShadows.push(shadow)
+      }
+    })
   }
 
   buildFloor() {
@@ -70,5 +87,9 @@ export default class World {
     }
 
     this.water.update(elapsed)
+
+    for (const shadow of this.blobShadows) {
+      shadow.update()
+    }
   }
 }
