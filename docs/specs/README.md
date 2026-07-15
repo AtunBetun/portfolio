@@ -21,6 +21,8 @@ Between gates, agents work autonomously in worktrees.
                                     │
 "Looks good, write the spec" ──→ spec at docs/specs/<id>.md
                                     │
+                    git add + git commit (spec must be committed!)
+                                    │
 "Mark it ready" ──→ label: spec:ready           ← GATE (you)
                                     │
 Cron (every 10min) ──→ dispatcher claims issue
@@ -39,6 +41,8 @@ Cron (every 10min) ──→ dispatcher claims issue
 "Show me the diff" ──→ you review   ← GATE (you)
                                     │
 "Merge it" ──→ git merge implement/<id>
+                                    │
+         cleanup (every 6h) removes worktree + branch
 ```
 
 ## Labels (Lifecycle)
@@ -51,6 +55,7 @@ Cron (every 10min) ──→ dispatcher claims issue
 | `spec:implemented` | Agent | Code on branch, awaiting review |
 | `spec:reviewed` | Reviewer agent | Review passed |
 | `spec:changes-requested` | Reviewer agent | Issues found |
+| `spec:blocked` | Agent | Cannot complete, needs human |
 
 ## Your Day-to-Day
 
@@ -61,8 +66,16 @@ proposes a plan, and writes the spec when you approve.
 
 ### Approve a spec
 
-Read `docs/specs/<id>.md`. If it captures what you want, say "mark it ready"
-or run `./scripts/promote-spec.sh <id> ready`.
+Read `docs/specs/<id>.md`. If it captures what you want:
+
+```bash
+# Spec MUST be committed (worktrees branch from main)
+git add docs/specs/<id>.md
+git commit -m "spec: <id> — <title>"
+
+# Then promote
+./scripts/promote-spec.sh <id> ready
+```
 
 ### Check progress
 
@@ -70,6 +83,17 @@ or run `./scripts/promote-spec.sh <id> ready`.
 claude agents                              # running sessions
 bd query "label=spec:implemented"          # done, awaiting your review
 bd query "label=spec:changes-requested"    # reviewer found issues
+bd query "label=spec:blocked"              # agent got stuck
+```
+
+### Handle changes-requested
+
+If the reviewer found issues, read the comment and re-queue:
+
+```bash
+bd comments <id>                           # read what the reviewer said
+# Fix the spec if needed, then:
+./scripts/promote-spec.sh <id> ready       # clears assignee, re-queues for dispatch
 ```
 
 ### Review and merge
@@ -85,16 +109,37 @@ The cleanup cron removes worktrees for merged branches automatically.
 ## Setup
 
 ```bash
-chmod +x scripts/*.sh
-./scripts/install-cron.sh
+./scripts/install-cron.sh    # chmod's scripts + installs cron
 ```
+
+That's it. The installer handles making scripts executable and setting PATH for cron.
 
 ## Scripts
 
 | Script | Schedule | Purpose |
 |--------|----------|---------|
-| `dispatch-ready-specs.sh` | every 10 min | Claim spec:ready issues, spawn agents in worktrees |
+| `dispatch-ready-specs.sh` | every 10 min | Query beads, create worktrees, spawn implementers |
 | `review-branches.sh` | every 15 min | Review implement/* branches, post bd comments |
-| `cleanup-worktrees.sh` | every 6 hours | Remove worktrees after merge |
-| `promote-spec.sh` | manual | Move bead: idea → planned → ready |
-| `install-cron.sh` | one-time | Install/remove cron jobs |
+| `cleanup-worktrees.sh` | every 6 hours | Remove worktrees after merge, recover orphaned claims |
+| `promote-spec.sh` | manual | Move bead: idea → planned → ready (clears assignee) |
+| `install-cron.sh` | one-time | Install/remove cron jobs, set PATH, chmod scripts |
+
+## Error Recovery
+
+| Problem | What happens | Fix |
+|---------|-------------|-----|
+| Agent crashes mid-implement | Bead is claimed, no worktree | Cleanup (6h) unclaims it automatically |
+| Reviewer requests changes | Dead-end until you act | `promote-spec.sh <id> ready` re-queues |
+| Spec not committed | Dispatcher skips it with a warning | `git add + commit` the spec |
+| Agent blocked | Labels spec:blocked + posts comment | Read comment, fix spec, re-promote |
+| Stale worktree | From previous failed run | Dispatcher cleans it before creating new one |
+
+## Monitoring
+
+```bash
+claude agents                              # live agent sessions
+tail -f ~/.claude/logs/dispatch.log        # dispatcher output
+tail -f ~/.claude/logs/review.log          # reviewer output
+tail -f ~/.claude/logs/cleanup.log         # cleanup output
+bd query "status=in_progress"              # work in flight
+```

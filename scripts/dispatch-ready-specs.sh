@@ -1,34 +1,148 @@
 #!/usr/bin/env bash
 #
-# dispatch-ready-specs.sh — Cron launcher for the dispatcher agent
+# dispatch-ready-specs.sh — Find spec:ready issues, create worktrees, spawn implementers
 #
-# Spawns a Claude background session that checks beads for ready specs
-# and dispatches one implementer agent per spec in its own git worktree.
-# Everything stays local — no GitHub, no PRs.
+# This script does all deterministic work (query, claim, worktree creation) in shell,
+# then spawns Claude only for the actual implementation (the part needing judgment).
+#
+# Usage:
+#   ./scripts/dispatch-ready-specs.sh          # normal run
+#   ./scripts/dispatch-ready-specs.sh --dry-run
 #
 set -euo pipefail
 
-REPO_ROOT="$(git -C "$(dirname "$0")/.." rev-parse --show-toplevel)"
+# Resolve paths — always run from repo root
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
-claude --bg -p "You are the dispatcher for the spec-driven agent pipeline.
-All work is LOCAL — no GitHub, no PRs.
+# Ensure tools are on PATH (cron has minimal PATH)
+export PATH="$HOME/.toolbox/bin:$HOME/.local/bin:$PATH"
 
-1. Query beads for implementation-ready work:
-   Run: bd query \"label=spec:ready AND status=open AND assignee=none\"
-2. If there are none, say so and stop.
-3. Check how many Claude agents are already running (claude agents --json).
-   If 4 or more, stop — wait for slots to free.
-4. For each ready issue (up to the free slots):
-   a. Claim it: bd update <id> --claim
-   b. Create git worktree: git worktree add .worktrees/<issue-id> -b implement/<issue-id> main
-      (If branch exists from a stale run, remove it first.)
-   c. Spawn a background implementer: claude --bg --add-dir .worktrees/<issue-id> with a prompt telling it:
-      - You are in worktree .worktrees/<issue-id> on branch implement/<issue-id>
-      - Read the spec at docs/specs/<issue-id>.md
-      - Implement everything in the spec
-      - Write and run tests from the spec's Test Plan
-      - Commit with a message referencing <issue-id>
-      - When done, relabel the bead: remove spec:ready, add spec:implemented
-      - Do NOT push, do NOT open a PR — all local
-5. Report what you dispatched."
+DRY_RUN=false
+MAX_IMPLEMENTERS=4
+LOCK_FILE="$REPO_ROOT/.worktrees/.dispatch.lock"
+
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run) DRY_RUN=true ;;
+    --max=*) MAX_IMPLEMENTERS="${arg#--max=}" ;;
+  esac
+done
+
+# Ensure worktrees directory exists (for lockfile)
+mkdir -p "$REPO_ROOT/.worktrees"
+
+# Prevent overlapping dispatcher runs
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+  echo "[dispatch] Another dispatcher is already running. Exiting."
+  exit 0
+fi
+
+# Query for ready specs — deterministic shell, no LLM needed
+READY_ISSUES=$(bd query "label=spec:ready AND status=open AND assignee=none" --json 2>/dev/null || echo "[]")
+ISSUE_COUNT=$(echo "$READY_ISSUES" | jq 'length')
+
+if [ "$ISSUE_COUNT" -eq 0 ]; then
+  echo "[dispatch] No spec:ready issues available. Nothing to do."
+  exit 0
+fi
+
+echo "[dispatch] Found $ISSUE_COUNT ready issue(s)."
+
+# Count only IMPLEMENTER agents (implement/* in their cwd), not reviewer/cleanup/other
+RUNNING=$(claude agents --json --cwd "$REPO_ROOT" 2>/dev/null \
+  | jq '[.[] | select(.status == "running")] | length' 2>/dev/null || echo "0")
+# Subtract non-implementer sessions (this dispatcher, reviewer, cleanup)
+# Conservative: count all running sessions toward the cap
+SLOTS=$((MAX_IMPLEMENTERS - RUNNING))
+
+if [ "$SLOTS" -le 0 ]; then
+  echo "[dispatch] $RUNNING agent(s) running (max $MAX_IMPLEMENTERS). No slots free."
+  exit 0
+fi
+
+echo "[dispatch] $RUNNING running, $SLOTS slot(s) available."
+
+# Process each ready issue
+echo "$READY_ISSUES" | jq -c '.[]' | head -n "$SLOTS" | while IFS= read -r issue; do
+  ISSUE_ID=$(echo "$issue" | jq -r '.id')
+  ISSUE_TITLE=$(echo "$issue" | jq -r '.title')
+  SPEC_FILE="docs/specs/${ISSUE_ID}.md"
+  BRANCH_NAME="implement/$ISSUE_ID"
+  WORKTREE_PATH="$REPO_ROOT/.worktrees/$ISSUE_ID"
+
+  # Verify spec file is committed to main (worktree branches from main)
+  if ! git cat-file -e "main:$SPEC_FILE" 2>/dev/null; then
+    echo "[dispatch] WARNING: $SPEC_FILE not committed to main. Skipping $ISSUE_ID."
+    echo "           Commit the spec first: git add $SPEC_FILE && git commit"
+    continue
+  fi
+
+  echo "[dispatch] Processing: $ISSUE_ID — $ISSUE_TITLE"
+
+  if [ "$DRY_RUN" = true ]; then
+    echo "           [DRY RUN] Would claim and dispatch."
+    continue
+  fi
+
+  # Clean up stale worktree if it exists (from a previous failed run)
+  if [ -d "$WORKTREE_PATH" ]; then
+    echo "[dispatch] Removing stale worktree: $WORKTREE_PATH"
+    git worktree remove "$WORKTREE_PATH" --force 2>/dev/null || rm -rf "$WORKTREE_PATH"
+  fi
+
+  # Clean up stale branch if it exists and isn't checked out elsewhere
+  if git show-ref --verify --quiet "refs/heads/$BRANCH_NAME" 2>/dev/null; then
+    # Only delete if no worktree has it checked out
+    if ! git worktree list --porcelain | grep -q "branch refs/heads/$BRANCH_NAME"; then
+      git branch -D "$BRANCH_NAME" 2>/dev/null || true
+    else
+      echo "[dispatch] WARNING: Branch $BRANCH_NAME is checked out in another worktree. Skipping."
+      continue
+    fi
+  fi
+
+  # Create worktree on a new branch from main
+  if ! git worktree add "$WORKTREE_PATH" -b "$BRANCH_NAME" main 2>&1; then
+    echo "[dispatch] ERROR: Failed to create worktree for $ISSUE_ID. Skipping."
+    continue
+  fi
+
+  # Claim the issue AFTER worktree is successfully created
+  bd update "$ISSUE_ID" --claim --quiet 2>/dev/null || true
+
+  echo "[dispatch] Worktree ready: $WORKTREE_PATH (branch: $BRANCH_NAME)"
+
+  # Spawn implementer — Claude only for the judgment work (implementation)
+  # The agent's cwd is set to the worktree via cd in a subshell
+  PROMPT="You are implementing a feature for this project.
+
+Your working directory is already set to the correct location.
+You are on branch '$BRANCH_NAME' in an isolated git worktree.
+
+Instructions:
+1. Read the spec: $SPEC_FILE
+2. Implement everything described in the spec.
+3. Write tests as described in the Test Plan section.
+4. Run the tests and fix any failures.
+5. Commit your work with message: feat($ISSUE_ID): $ISSUE_TITLE
+6. When done, run these commands to update the bead:
+   bd label remove $ISSUE_ID spec:ready
+   bd label add $ISSUE_ID spec:implemented
+7. If you cannot complete the work (tests won't pass, spec is ambiguous):
+   bd label remove $ISSUE_ID spec:ready
+   bd label add $ISSUE_ID spec:blocked
+   bd comment $ISSUE_ID \"BLOCKED: <reason>\"
+
+Do NOT push. Do NOT merge into main. Do NOT switch branches.
+All work stays local on this branch."
+
+  (cd "$WORKTREE_PATH" && claude --bg -p "$PROMPT") &
+
+  echo "[dispatch] Implementer spawned for $ISSUE_ID"
+  sleep 1
+done
+
+echo "[dispatch] Done. Watch with: claude agents"
