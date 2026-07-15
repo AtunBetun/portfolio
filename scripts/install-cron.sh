@@ -26,7 +26,7 @@ fi
 #   Reviewer:   every 15 minutes (offset by 5 min)
 #   Cleanup:    every 6 hours
 DISPATCH_CRON="*/10 * * * * cd $REPO_ROOT && $SCRIPTS_DIR/dispatch-ready-specs.sh >> $LOG_DIR/dispatch.log 2>&1 $CRON_MARKER"
-REVIEW_CRON="5,20,35,50 * * * * cd $REPO_ROOT && $SCRIPTS_DIR/review-open-prs.sh >> $LOG_DIR/review.log 2>&1 $CRON_MARKER"
+REVIEW_CRON="5,20,35,50 * * * * cd $REPO_ROOT && $SCRIPTS_DIR/review-branches.sh >> $LOG_DIR/review.log 2>&1 $CRON_MARKER"
 CLEANUP_CRON="0 */6 * * * cd $REPO_ROOT && $SCRIPTS_DIR/cleanup-worktrees.sh >> $LOG_DIR/cleanup.log 2>&1 $CRON_MARKER"
 
 # Remove old entries, add fresh ones

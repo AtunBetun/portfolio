@@ -1,81 +1,86 @@
 # Spec-Driven Agent Pipeline
 
-Plan features in detail, then let Claude agents auto-implement them in isolated worktrees.
+Plan features with Claude, approve specs, let agents implement in isolated worktrees.
 
-Everything runs locally — no GitHub, no PRs. You merge branches when ready.
+Everything runs locally. You stay in the loop at three gates.
 
-## How It Works
+## Three Human Gates
+
+| Gate | What happens | Your action |
+|------|-------------|-------------|
+| **1. Planning** | Claude proposes a plan for a feature | You approve or adjust |
+| **2. Spec approval** | Claude writes `docs/specs/<id>.md` | You say "ready" to green-light |
+| **3. Final review** | Agent implements, reviewer comments | You read diff, merge to main |
+
+Between gates, agents work autonomously in worktrees.
+
+## Flow
 
 ```
-You tell Claude "plan X" ──→ spec written to docs/specs/<id>.md
+"Plan particle effects" ──→ Claude proposes plan
                                     │
-You say "that spec is ready" ──→ label becomes spec:ready
+"Looks good, write the spec" ──→ spec at docs/specs/<id>.md
                                     │
-Cron (every 10min) ──→ dispatcher sees ready spec
+"Mark it ready" ──→ label: spec:ready           ← GATE (you)
                                     │
-                       ┌────────────┘
-                       ▼
+Cron (every 10min) ──→ dispatcher claims issue
+                                    │
          git worktree .worktrees/<id>
          branch: implement/<id>
-                       │
-                       ▼
-         claude --bg implements in worktree (visible in `claude agents`)
-                       │
-                       ▼
-         commits, relabels → spec:implemented
-                       │
-         reviewer cron (every 15min) reads diff, posts bd comment
-                       │
-                       ▼
+                                    │
+         agent implements, commits
+                                    │
+         relabels → spec:implemented
+                                    │
+         reviewer (every 15min) reads diff, posts bd comment
+                                    │
          spec:reviewed (or spec:changes-requested)
-                       │
-                       ▼
-         You: git merge implement/<id>   ← when satisfied
+                                    │
+"Show me the diff" ──→ you review   ← GATE (you)
+                                    │
+"Merge it" ──→ git merge implement/<id>
 ```
 
 ## Labels (Lifecycle)
 
-| Label | Meaning | Set by |
-|-------|---------|--------|
-| `spec:idea` | Issue exists, no spec yet | You |
-| `spec:planned` | Spec file written at `docs/specs/<id>.md` | You |
-| `spec:ready` | Agent can claim and implement this | You |
-| `spec:implemented` | Code done, on branch, awaiting review | Agent |
-| `spec:reviewed` | Review passed | Reviewer agent |
-| `spec:changes-requested` | Issues found, needs rework | Reviewer agent |
+| Label | Set by | Meaning |
+|-------|--------|---------|
+| `spec:idea` | Claude or you | Issue exists, no spec |
+| `spec:planned` | Claude | Spec drafted, awaiting your review |
+| `spec:ready` | **You only** | Approved for implementation |
+| `spec:implemented` | Agent | Code on branch, awaiting review |
+| `spec:reviewed` | Reviewer agent | Review passed |
+| `spec:changes-requested` | Reviewer agent | Issues found |
 
-## Your Workflow
+## Your Day-to-Day
 
-### 1. Tell Claude what you want
+### Plan a feature
 
-> "Plan a particle system for portal effects"
+Just talk to Claude: "I want portal particle effects." Claude creates a bead,
+proposes a plan, and writes the spec when you approve.
 
-Claude creates a bead, writes a spec to `docs/specs/<id>.md`, labels it `spec:planned`.
+### Approve a spec
 
-### 2. Review the spec, then promote
+Read `docs/specs/<id>.md`. If it captures what you want, say "mark it ready"
+or run `./scripts/promote-spec.sh <id> ready`.
 
-> "That spec looks good, mark it ready"
-
-Or manually: `./scripts/promote-spec.sh <id> ready`
-
-### 3. Wait (or watch)
+### Check progress
 
 ```bash
-claude agents         # see running implementer sessions
-bd query "label=spec:implemented"  # see what's done
+claude agents                              # running sessions
+bd query "label=spec:implemented"          # done, awaiting your review
+bd query "label=spec:changes-requested"    # reviewer found issues
 ```
 
-### 4. Review and merge
-
-The reviewer agent posts comments on the bead. When satisfied:
+### Review and merge
 
 ```bash
-git merge implement/<id>     # merge into main
-# cleanup cron handles the rest, or:
-git worktree remove .worktrees/<id>
-git branch -d implement/<id>
-bd close <id>
+git diff main...implement/<id>             # see what changed
+bd comments <id>                           # read reviewer feedback
+git merge implement/<id>                   # merge when happy
 ```
+
+The cleanup cron removes worktrees for merged branches automatically.
 
 ## Setup
 
@@ -84,30 +89,12 @@ chmod +x scripts/*.sh
 ./scripts/install-cron.sh
 ```
 
-### Permission Mode
-
-For unattended cron, agents can't wait for permission prompts. Options:
-
-1. Add `--dangerously-skip-permissions` to the `claude --bg` calls in the scripts
-   (only if this box has no internet / is sandboxed)
-2. Add broad allowlist rules to `.claude/settings.json` for `bd`, `git`, file operations
-
 ## Scripts
 
-| Script | Cron | Purpose |
-|--------|------|---------|
-| `dispatch-ready-specs.sh` | every 10 min | Find spec:ready issues, spawn implementer agents |
-| `review-open-prs.sh` | every 15 min | Review spec:implemented branches, post comments |
-| `cleanup-worktrees.sh` | every 6 hours | Remove worktrees for merged/closed work |
-| `promote-spec.sh` | manual | Move bead through idea → planned → ready |
-| `install-cron.sh` | one-time | Install/remove all cron jobs |
-
-## Monitoring
-
-```bash
-claude agents                              # live agent sessions
-tail -f ~/.claude/logs/dispatch.log        # dispatcher output
-tail -f ~/.claude/logs/review.log          # reviewer output
-bd query "status=in_progress"              # work in flight
-bd query "label=spec:changes-requested"    # needs rework
-```
+| Script | Schedule | Purpose |
+|--------|----------|---------|
+| `dispatch-ready-specs.sh` | every 10 min | Claim spec:ready issues, spawn agents in worktrees |
+| `review-branches.sh` | every 15 min | Review implement/* branches, post bd comments |
+| `cleanup-worktrees.sh` | every 6 hours | Remove worktrees after merge |
+| `promote-spec.sh` | manual | Move bead: idea → planned → ready |
+| `install-cron.sh` | one-time | Install/remove cron jobs |
