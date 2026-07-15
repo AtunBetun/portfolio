@@ -3,8 +3,8 @@
 # dispatch-ready-specs.sh — Cron-triggered dispatcher
 #
 # Queries beads for spec:ready issues that are unassigned,
-# then spawns a `claude --bg` session per issue.
-# Each session shows up in `claude agents` view.
+# creates a git worktree per issue, then spawns a `claude --bg`
+# session inside that worktree. Each session shows up in `claude agents`.
 #
 # Usage:
 #   ./scripts/dispatch-ready-specs.sh          # dispatch all ready specs
@@ -18,6 +18,9 @@ cd "$REPO_ROOT"
 
 DRY_RUN=false
 MAX_DISPATCH=4  # Don't overwhelm the box
+WORKTREE_DIR="$REPO_ROOT/.worktrees"
+
+mkdir -p "$WORKTREE_DIR"
 
 for arg in "$@"; do
   case "$arg" in
@@ -75,39 +78,68 @@ echo "$READY_ISSUES" | jq -c '.[]' | head -n "$SLOTS" | while read -r issue; do
   # Claim the issue so no other dispatcher grabs it
   bd update "$ISSUE_ID" --claim --quiet 2>/dev/null || true
 
-  # Build the prompt for the implementing agent
+  # --- Create a git worktree for this issue ---
+  BRANCH_NAME="implement/$ISSUE_ID"
+  WORKTREE_PATH="$WORKTREE_DIR/$ISSUE_ID"
+
+  # Clean up stale worktree if it exists from a previous failed run
+  if [ -d "$WORKTREE_PATH" ]; then
+    echo "[dispatch] Cleaning stale worktree: $WORKTREE_PATH"
+    git worktree remove "$WORKTREE_PATH" --force 2>/dev/null || rm -rf "$WORKTREE_PATH"
+  fi
+
+  # Create fresh branch and worktree from current main
+  git worktree add -b "$BRANCH_NAME" "$WORKTREE_PATH" origin/main 2>/dev/null || {
+    # Branch might already exist (retry from a previous attempt)
+    git branch -D "$BRANCH_NAME" 2>/dev/null || true
+    git worktree add -b "$BRANCH_NAME" "$WORKTREE_PATH" origin/main
+  }
+
+  echo "[dispatch] Worktree created: $WORKTREE_PATH (branch: $BRANCH_NAME)"
+
+  # Copy the spec file path relative to repo root — it's the same in the worktree
   PROMPT=$(cat <<EOF
-You are implementing a feature for this project. Follow these steps exactly:
+You are implementing a feature for this project.
+
+You are already in a git worktree on branch "$BRANCH_NAME".
+Your working directory is: $WORKTREE_PATH
+
+Follow these steps exactly:
 
 1. Read the spec file: $SPEC_FILE
-2. Create a new git branch named: implement/$ISSUE_ID
-3. Implement everything described in the spec
-4. Write tests as described in the Test Plan section
-5. Run the tests and fix any failures
-6. Commit your work with a descriptive message referencing $ISSUE_ID
-7. Push the branch: git push -u origin implement/$ISSUE_ID
-8. Open a draft PR: gh pr create --draft --title "feat($ISSUE_ID): $ISSUE_TITLE" --body "Implements $ISSUE_ID. See docs/specs/ for full spec."
-9. Update the bead: bd label remove $ISSUE_ID spec:ready && bd label add $ISSUE_ID spec:in-review
-10. Report the PR URL when done.
+   (This path is relative to your working directory.)
+2. Implement everything described in the spec.
+3. Write tests as described in the Test Plan section.
+4. Run the tests and fix any failures.
+5. Commit your work with a descriptive message referencing $ISSUE_ID.
+6. Push the branch: git push -u origin $BRANCH_NAME
+7. Open a draft PR:
+   gh pr create --draft \\
+     --title "feat($ISSUE_ID): $ISSUE_TITLE" \\
+     --body "Implements $ISSUE_ID. See docs/specs/ for full spec."
+8. Update the bead:
+   bd label remove $ISSUE_ID spec:ready
+   bd label add $ISSUE_ID spec:in-review
+9. Report the PR URL when done.
 
 Issue: $ISSUE_ID
 Title: $ISSUE_TITLE
 Spec: $SPEC_FILE
 
-IMPORTANT: Work in a git worktree to avoid conflicts with other agents.
-Use EnterWorktree before making any changes.
+Do NOT use the EnterWorktree tool — you are already in an isolated worktree.
+Do NOT switch branches — you are already on the correct branch.
 EOF
 )
 
-  # Spawn the background agent — shows up in `claude agents`
-  # NOTE: Add --dangerously-skip-permissions if running in a sandboxed environment.
-  # Without it, the agent will prompt for tool permissions (which blocks in cron).
-  # You must explicitly opt in — see README.
+  # Spawn the background agent inside the worktree directory.
+  # It shows up in `claude agents` with full session visibility.
+  # NOTE: Add --dangerously-skip-permissions for unattended cron operation.
   claude --bg \
-    --allowedTools "Bash Read Write Edit Agent EnterWorktree" \
+    --allowedTools "Bash Read Write Edit" \
+    --add-dir "$WORKTREE_PATH" \
     -p "$PROMPT" &
 
-  echo "[dispatch] Agent spawned for $ISSUE_ID"
+  echo "[dispatch] Agent spawned for $ISSUE_ID in $WORKTREE_PATH"
   sleep 2  # Brief pause between spawns
 done
 

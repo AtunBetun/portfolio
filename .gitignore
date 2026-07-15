@@ -6,3 +6,6 @@ build/
 tests/screenshots/
 test-results/
 playwright-report/
+
+# Agent worktrees (created by dispatch-ready-specs.sh)
+.worktrees/
