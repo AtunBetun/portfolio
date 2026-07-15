@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import Game from '../Game.js'
+import { toon } from '../Rendering/ToonMaterials.js'
 
 export default class Collectible {
   constructor(config) {
@@ -15,18 +16,14 @@ export default class Collectible {
   }
 
   buildVisual() {
-    const geo = new THREE.OctahedronGeometry(0.2, 0)
-    const mat = new THREE.MeshStandardMaterial({
-      color: this.color,
-      emissive: this.color,
-      emissiveIntensity: 0.5,
-      flatShading: true
-    })
+    const geo = new THREE.IcosahedronGeometry(0.2, 0)
+    const mat = toon(this.color)
     this.mesh = new THREE.Mesh(geo, mat)
     this.mesh.position.copy(this.position)
+    this.mesh.castShadow = true
     this.group.add(this.mesh)
 
-    const light = new THREE.PointLight(this.color, 0.5, 2)
+    const light = new THREE.PointLight(this.color, 0.4, 2)
     light.position.copy(this.position)
     this.light = light
     this.group.add(light)

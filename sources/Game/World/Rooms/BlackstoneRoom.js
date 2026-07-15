@@ -1,13 +1,10 @@
 import * as THREE from 'three'
-
-const BLACKSTONE_TEAL = 0x1b4d4d
+import { toon } from '../../Rendering/ToonMaterials.js'
+import { PALETTE } from '../../Rendering/Palette.js'
 
 export function buildBlackstoneProps(group) {
   const serverGeo = new THREE.BoxGeometry(0.6, 2, 0.6)
-  const serverMat = new THREE.MeshStandardMaterial({
-    color: 0x2a2a2a,
-    flatShading: true
-  })
+  const serverMat = toon('stoneDark')
 
   for (let i = 0; i < 3; i++) {
     const server = new THREE.Mesh(serverGeo, serverMat)
@@ -15,37 +12,21 @@ export function buildBlackstoneProps(group) {
     server.castShadow = true
     group.add(server)
 
-    const ledGeo = new THREE.BoxGeometry(0.1, 0.1, 0.01)
-    const ledMat = new THREE.MeshStandardMaterial({
-      color: BLACKSTONE_TEAL,
-      emissive: BLACKSTONE_TEAL,
-      emissiveIntensity: 0.8,
-      flatShading: true
-    })
-    const led = new THREE.Mesh(ledGeo, ledMat)
+    const led = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.01), toon('blackstoneTeal'))
     led.position.set(-2.5 + i * 0.8, 1.5, -1.69)
     group.add(led)
   }
 
-  const pipelineGeo = new THREE.CylinderGeometry(0.05, 0.05, 3, 6)
-  const pipelineMat = new THREE.MeshStandardMaterial({
-    color: BLACKSTONE_TEAL,
-    emissive: BLACKSTONE_TEAL,
-    emissiveIntensity: 0.3,
-    flatShading: true
-  })
-  const pipeline = new THREE.Mesh(pipelineGeo, pipelineMat)
+  const pipeline = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.06, 0.06, 3, 8),
+    toon('blackstoneTeal')
+  )
   pipeline.rotation.z = Math.PI / 2
   pipeline.position.set(0, 0.5, 2)
   group.add(pipeline)
 
-  const nodeGeo = new THREE.SphereGeometry(0.15, 6, 4)
-  const nodeMat = new THREE.MeshStandardMaterial({
-    color: BLACKSTONE_TEAL,
-    emissive: BLACKSTONE_TEAL,
-    emissiveIntensity: 0.5,
-    flatShading: true
-  })
+  const nodeGeo = new THREE.SphereGeometry(0.18, 8, 6)
+  const nodeMat = toon('blackstoneTeal')
   for (let i = 0; i < 4; i++) {
     const node = new THREE.Mesh(nodeGeo, nodeMat)
     node.position.set(-1.5 + i, 0.5, 2)
@@ -56,7 +37,7 @@ export function buildBlackstoneProps(group) {
 
 export function getBlackstoneCollectibles() {
   return [
-    { id: 'bs-react-app', x: 2.5, z: 0, color: BLACKSTONE_TEAL },
-    { id: 'bs-data-pipeline', x: -1, z: 2, color: BLACKSTONE_TEAL }
+    { id: 'bs-react-app', x: 2.5, z: 0, color: PALETTE.blackstoneTeal },
+    { id: 'bs-data-pipeline', x: -1, z: 2, color: PALETTE.blackstoneTeal }
   ]
 }

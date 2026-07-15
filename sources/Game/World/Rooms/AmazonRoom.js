@@ -1,10 +1,10 @@
 import * as THREE from 'three'
-
-const AMAZON_ORANGE = 0xff9900
+import { toon } from '../../Rendering/ToonMaterials.js'
+import { PALETTE } from '../../Rendering/Palette.js'
 
 export function buildAmazonProps(group) {
   const rackGeo = new THREE.BoxGeometry(0.4, 2.5, 0.4)
-  const rackMat = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, flatShading: true })
+  const rackMat = toon('stoneDark')
 
   for (let row = 0; row < 2; row++) {
     for (let col = 0; col < 3; col++) {
@@ -15,30 +15,21 @@ export function buildAmazonProps(group) {
     }
   }
 
-  const archGeo = new THREE.TorusGeometry(1, 0.05, 8, 20, Math.PI)
-  const archMat = new THREE.MeshStandardMaterial({
-    color: AMAZON_ORANGE,
-    emissive: AMAZON_ORANGE,
-    emissiveIntensity: 0.5,
-    flatShading: true
-  })
-  const arch = new THREE.Mesh(archGeo, archMat)
+  const arch = new THREE.Mesh(
+    new THREE.TorusGeometry(1, 0.08, 8, 20, Math.PI),
+    toon('amazonOrange')
+  )
   arch.position.set(2, 1.5, 0)
   arch.rotation.x = Math.PI / 2
   group.add(arch)
 
-  const connectionMat = new THREE.MeshStandardMaterial({
-    color: AMAZON_ORANGE,
-    emissive: AMAZON_ORANGE,
-    emissiveIntensity: 0.3,
-    flatShading: true
-  })
+  const connectionMat = toon('amazonOrange')
   const positions = [
     [-1.5, 0.3, 1.5],
     [0, 0.3, 2.5],
     [1.5, 0.3, 1.5]
   ]
-  const lineGeo = new THREE.CylinderGeometry(0.03, 0.03, 2, 4)
+  const lineGeo = new THREE.CylinderGeometry(0.04, 0.04, 2, 6)
   for (let i = 0; i < positions.length - 1; i++) {
     const line = new THREE.Mesh(lineGeo, connectionMat)
     const start = positions[i]
@@ -60,7 +51,7 @@ export function buildAmazonProps(group) {
 
 export function getAmazonCollectibles() {
   return [
-    { id: 'amz-microservice', x: 2, z: -1, color: AMAZON_ORANGE },
-    { id: 'amz-architecture', x: -2, z: 2, color: AMAZON_ORANGE }
+    { id: 'amz-microservice', x: 2, z: -1, color: PALETTE.amazonOrange },
+    { id: 'amz-architecture', x: -2, z: 2, color: PALETTE.amazonOrange }
   ]
 }
