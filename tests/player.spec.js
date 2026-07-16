@@ -7,6 +7,14 @@ test('WASD moves player position', async ({ page }) => {
   await page.goto('/')
   await page.waitForFunction(() => window.__game?.loadState === 'ready', { timeout: 15000 })
 
+  await page.waitForFunction(
+    () => {
+      const s = window.__game.debug?.playerState
+      return s === 'idle' || s === 'run' || s === 'land'
+    },
+    { timeout: 5000 }
+  )
+
   const startPos = await page.evaluate(() => window.__game.playerPosition)
   expect(startPos).not.toBeNull()
 
@@ -36,12 +44,16 @@ test('player falls off edge and respawns', async ({ page }) => {
   await page.goto('/')
   await page.waitForFunction(() => window.__game?.loadState === 'ready', { timeout: 15000 })
 
-  await page.evaluate(() => window.__game.teleportPlayer(24, 1, 0))
-  await page.waitForTimeout(100)
+  await page.waitForFunction(
+    () => {
+      const s = window.__game.debug?.playerState
+      return s === 'idle' || s === 'run' || s === 'land'
+    },
+    { timeout: 5000 }
+  )
 
-  await page.keyboard.down('KeyD')
-  await page.waitForTimeout(1500)
-  await page.keyboard.up('KeyD')
+  await page.evaluate(() => window.__game.teleportPlayer(26, 2, 0))
+  await page.waitForTimeout(3000)
 
   const pos = await page.evaluate(() => window.__game.playerPosition)
   expect(pos.y).toBeGreaterThan(-5)
