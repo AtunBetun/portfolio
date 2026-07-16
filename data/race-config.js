@@ -1,5 +1,5 @@
 export const RACE_CONFIG = {
-  courseLength: 200,
+  courseLength: 450,
   strokeImpulse: 2.0,
   dragHalfLife: 2.2,
   paddleCooldown: 0.18,
@@ -14,7 +14,7 @@ export const RACE_CONFIG = {
   },
 
   waves: {
-    progressMarks: [0.18, 0.4, 0.52, 0.7, 0.8, 0.9],
+    progressMarks: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.92],
     ampByPhase: [1.2, 1.8, 2.6],
     sigma: 2.2,
     speed: 8,
@@ -31,9 +31,9 @@ export const RACE_CONFIG = {
   },
 
   medals: {
-    gold: 28,
-    silver: 32,
-    bronze: 38
+    gold: 52,
+    silver: 58,
+    bronze: 65
   },
 
   drift: {

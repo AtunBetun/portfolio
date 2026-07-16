@@ -201,12 +201,12 @@ describe('CourseProgress', () => {
   })
 
   describe('medal thresholds', () => {
-    it('gold time implies average speed of courseLength / gold seconds', () => {
+    it('gold time implies achievable average speed below maxSpeed', () => {
       const goldSpeed = RACE_CONFIG.courseLength / RACE_CONFIG.medals.gold
-      expect(RACE_CONFIG.medals.gold).toBe(28)
-      expect(goldSpeed).toBeCloseTo(RACE_CONFIG.courseLength / 28)
+      expect(goldSpeed).toBeLessThan(RACE_CONFIG.maxSpeed)
+      expect(goldSpeed).toBeGreaterThan(0)
       const course = new CourseProgress()
-      course.updateProgress(-goldSpeed * RACE_CONFIG.medals.gold)
+      course.updateProgress(-RACE_CONFIG.courseLength)
       expect(course.progress).toBe(1)
       expect(course.finished).toBe(true)
     })

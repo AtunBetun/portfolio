@@ -140,7 +140,7 @@ export default class Boat {
 
     // Paddle pivot at shoulder
     const pivot = new THREE.Group()
-    pivot.position.set(seat.side === 'left' ? -0.15 : 0.15, 0.24, 0)
+    pivot.position.set(seat.side === 'left' ? 0.15 : -0.15, 0.24, 0)
 
     const shaftGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.7, 5)
     const shaft = new THREE.Mesh(shaftGeo, toon('wood'))
@@ -280,8 +280,10 @@ export default class Boat {
       }
     }
 
-    // Left paddles in water → boat turns right, and vice versa
-    this.heading += side === 'left' ? HEADING_NUDGE : -HEADING_NUDGE
+    // Left paddles in water → boat turns right, and vice versa.
+    // With the course heading of PI (facing -Z), decreasing heading
+    // veers screen-right and increasing veers screen-left.
+    this.heading += side === 'left' ? -HEADING_NUDGE : HEADING_NUDGE
     this.spawnSplash(side)
     return true
   }
