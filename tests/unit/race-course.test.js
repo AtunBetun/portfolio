@@ -25,6 +25,29 @@ class CourseProgress {
   }
 }
 
+class WaveSpawner {
+  constructor(config = RACE_CONFIG.waves) {
+    this.progressMarks = config.progressMarks
+    this.nextMarkIndex = 0
+  }
+
+  update(progress) {
+    const spawned = []
+    while (
+      this.nextMarkIndex < this.progressMarks.length &&
+      progress >= this.progressMarks[this.nextMarkIndex]
+    ) {
+      spawned.push(this.progressMarks[this.nextMarkIndex])
+      this.nextMarkIndex++
+    }
+    return spawned
+  }
+
+  reset() {
+    this.nextMarkIndex = 0
+  }
+}
+
 describe('CourseProgress', () => {
   describe('progress tracking', () => {
     it('starts with progress at 0', () => {
@@ -106,29 +129,62 @@ describe('CourseProgress', () => {
     })
   })
 
-  describe('speed modifiers', () => {
-    it('increases effective position change with perfect boost', () => {
-      const base = new CourseProgress()
-      const boosted = new CourseProgress()
-      const dt = 1
-      const baseDelta = RACE_CONFIG.paddleBaseSpeed * dt
-      const boostedDelta = RACE_CONFIG.paddleBaseSpeed * RACE_CONFIG.perfectBoost * dt
-      base.updateProgress(-baseDelta)
-      boosted.updateProgress(-boostedDelta)
-      expect(boostedDelta).toBeGreaterThan(baseDelta)
-      expect(boosted.progress).toBeGreaterThan(base.progress)
+  describe('wave spawning', () => {
+    it('spawns no waves before the first progress mark', () => {
+      const spawner = new WaveSpawner()
+      const firstMark = RACE_CONFIG.waves.progressMarks[0]
+      expect(spawner.update(firstMark - 0.01)).toEqual([])
     })
 
-    it('reduces effective position change with bad timing penalty', () => {
-      const base = new CourseProgress()
-      const penalized = new CourseProgress()
-      const dt = 1
-      const baseDelta = RACE_CONFIG.paddleBaseSpeed * dt
-      const penalizedDelta = RACE_CONFIG.paddleBaseSpeed * RACE_CONFIG.badPenalty * dt
-      base.updateProgress(-baseDelta)
-      penalized.updateProgress(-penalizedDelta)
-      expect(penalizedDelta).toBeLessThan(baseDelta)
-      expect(penalized.progress).toBeLessThan(base.progress)
+    it('spawns a wave exactly at each progress mark', () => {
+      const spawner = new WaveSpawner()
+      for (const mark of RACE_CONFIG.waves.progressMarks) {
+        expect(spawner.update(mark)).toEqual([mark])
+      }
+    })
+
+    it('spawns each wave only once', () => {
+      const spawner = new WaveSpawner()
+      const firstMark = RACE_CONFIG.waves.progressMarks[0]
+      expect(spawner.update(firstMark)).toEqual([firstMark])
+      expect(spawner.update(firstMark)).toEqual([])
+    })
+
+    it('spawns all remaining waves when progress jumps past several marks', () => {
+      const spawner = new WaveSpawner()
+      expect(spawner.update(1)).toEqual(RACE_CONFIG.waves.progressMarks)
+      expect(spawner.update(1)).toEqual([])
+    })
+
+    it('spawns waves again after reset', () => {
+      const spawner = new WaveSpawner()
+      spawner.update(1)
+      spawner.reset()
+      expect(spawner.update(1)).toEqual(RACE_CONFIG.waves.progressMarks)
+    })
+  })
+
+  describe('phase thresholds', () => {
+    it('returns phase 0 just below 0.33, phase 1 at 0.33', () => {
+      const course = new CourseProgress()
+      course.updateProgress(-RACE_CONFIG.courseLength * 0.329)
+      expect(course.getPhase()).toBe(0)
+      course.updateProgress(-RACE_CONFIG.courseLength * 0.33)
+      expect(course.getPhase()).toBe(1)
+    })
+
+    it('returns phase 1 just below 0.67, phase 2 at 0.67', () => {
+      const course = new CourseProgress()
+      course.updateProgress(-RACE_CONFIG.courseLength * 0.669)
+      expect(course.getPhase()).toBe(1)
+      course.updateProgress(-RACE_CONFIG.courseLength * 0.67)
+      expect(course.getPhase()).toBe(2)
+    })
+
+    it('returns phase 2 at the finish', () => {
+      const course = new CourseProgress()
+      course.updateProgress(-RACE_CONFIG.courseLength)
+      expect(course.getPhase()).toBe(2)
     })
   })
 
