@@ -63,6 +63,11 @@ function injectStyles() {
   border-radius: 4px 4px 2px 2px;
   background: #ffffff;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  animation: race-rhythm-pulse 0.35s ease infinite alternate;
+}
+.race-rhythm-icon.in-flow {
+  background: ${ACCENT};
+  box-shadow: 0 0 8px 2px ${ACCENT};
 }
 `
   document.head.appendChild(styleEl)
@@ -243,7 +248,7 @@ export default class RaceHUD {
       whiteSpace: 'nowrap',
       transition: 'opacity 0.6s ease'
     })
-    this.controlsEl.textContent = '← → or A/D to paddle  •  SPACE on waves'
+    this.controlsEl.textContent = 'A = left paddle  •  D = right paddle  •  Match the beat!'
     this.container.appendChild(this.controlsEl)
   }
 
@@ -316,6 +321,11 @@ export default class RaceHUD {
     this.flowBar.style.width = flow * 100 + '%'
     this.flowBar.style.opacity = String(0.3 + flow * 0.7)
     this.flowBar.classList.toggle('race-flow-glow', flow >= 0.7)
+
+    const inFlow = flow >= 0.7
+    for (const side of ['left', 'right']) {
+      this.rhythmIcons[side].classList.toggle('in-flow', inFlow)
+    }
   }
 
   showCombo(combo) {

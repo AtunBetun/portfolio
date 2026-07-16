@@ -36,19 +36,18 @@ class FlowState {
   constructor(config = RACE_CONFIG.flow) {
     this.config = config
     this.flow = 0
+    this.lastSide = null
   }
 
-  onStroke(interval) {
+  onStroke(interval, side = null) {
     const [min, max] = this.config.band
-    if (interval >= min && interval <= max) {
+    const alternated = this.lastSide !== null && side !== this.lastSide
+    if (alternated && interval >= min && interval <= max) {
       this.flow = Math.min(1, this.flow + this.config.gain)
-    } else {
+    } else if (interval > max) {
       this.flow = Math.max(0, this.flow - this.config.loss)
     }
-  }
-
-  onMisStroke() {
-    this.flow = Math.max(0, this.flow - this.config.loss)
+    this.lastSide = side
   }
 
   flowMultiplier() {
@@ -180,49 +179,50 @@ describe('FlowState', () => {
     expect(flow.flow).toBe(0)
   })
 
-  it('increases flow by gain for a stroke within the cadence band', () => {
+  it('increases flow for alternating strokes within the cadence band', () => {
     const flow = new FlowState()
-    flow.onStroke(inBandInterval)
+    flow.onStroke(inBandInterval, 'left')
+    flow.onStroke(inBandInterval, 'right')
     expect(flow.flow).toBeCloseTo(gain)
   })
 
-  it('decreases flow by loss for a stroke outside the band', () => {
+  it('does not change flow for same-side strokes within band', () => {
     const flow = new FlowState()
-    flow.onStroke(inBandInterval)
-    flow.onStroke(inBandInterval)
-    flow.onStroke(inBandInterval)
+    flow.onStroke(inBandInterval, 'left')
+    flow.onStroke(inBandInterval, 'left')
+    expect(flow.flow).toBe(0)
+  })
+
+  it('decreases flow for strokes too slow (outside band max)', () => {
+    const flow = new FlowState()
+    flow.onStroke(inBandInterval, 'left')
+    flow.onStroke(inBandInterval, 'right')
     const before = flow.flow
-    flow.onStroke(outOfBandInterval)
+    flow.onStroke(outOfBandInterval, 'left')
     expect(flow.flow).toBeCloseTo(Math.max(0, before - loss))
   })
 
   it('clamps flow to a maximum of 1', () => {
     const flow = new FlowState()
-    for (let i = 0; i < 100; i++) flow.onStroke(inBandInterval)
+    const sides = ['left', 'right']
+    for (let i = 0; i < 100; i++) flow.onStroke(inBandInterval, sides[i % 2])
     expect(flow.flow).toBe(1)
   })
 
   it('clamps flow to a minimum of 0', () => {
     const flow = new FlowState()
-    for (let i = 0; i < 100; i++) flow.onStroke(outOfBandInterval)
+    for (let i = 0; i < 100; i++) flow.onStroke(outOfBandInterval, 'left')
     expect(flow.flow).toBe(0)
-  })
-
-  it('decreases flow on a mis-stroke', () => {
-    const flow = new FlowState()
-    for (let i = 0; i < 100; i++) flow.onStroke(inBandInterval)
-    const before = flow.flow
-    flow.onMisStroke()
-    expect(flow.flow).toBeLessThan(before)
-    expect(flow.flow).toBeCloseTo(before - loss)
   })
 
   it('computes flowMultiplier as 1 + flow * maxBonus', () => {
     const flow = new FlowState()
     expect(flow.flowMultiplier()).toBe(1)
-    flow.onStroke(inBandInterval)
+    flow.onStroke(inBandInterval, 'left')
+    flow.onStroke(inBandInterval, 'right')
     expect(flow.flowMultiplier()).toBeCloseTo(1 + gain * maxBonus)
-    for (let i = 0; i < 100; i++) flow.onStroke(inBandInterval)
+    const sides = ['left', 'right']
+    for (let i = 0; i < 100; i++) flow.onStroke(inBandInterval, sides[i % 2])
     expect(flow.flowMultiplier()).toBeCloseTo(1 + maxBonus)
   })
 })

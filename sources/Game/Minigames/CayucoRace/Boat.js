@@ -6,7 +6,6 @@ const HULL_HALF = HULL_LENGTH / 2
 const HULL_WIDTH = 0.8
 const LATERAL_LIMIT = 4
 const HEADING_NUDGE = 0.025
-const MIS_STROKE_YAW = 0.05
 const STROKE_ANIM_DURATION = 0.25
 const PITCH_LERP = 0.1
 const ROLL_LERP = 0.1
@@ -108,10 +107,10 @@ export default class Boat {
 
     // 4 Paddlers in single file — alternating paddle sides
     const seats = [
-      { x: 0, z: 1.5, side: 'left', pair: 0 },
-      { x: 0, z: 0.5, side: 'right', pair: 1 },
-      { x: 0, z: -0.5, side: 'left', pair: 1 },
-      { x: 0, z: -1.5, side: 'right', pair: 0 }
+      { x: 0, z: 1.5, side: 'left' },
+      { x: 0, z: 0.5, side: 'right' },
+      { x: 0, z: -0.5, side: 'left' },
+      { x: 0, z: -1.5, side: 'right' }
     ]
 
     for (const seat of seats) {
@@ -159,7 +158,6 @@ export default class Boat {
       group,
       pivot,
       side: seat.side,
-      pair: seat.pair,
       phase: 0,
       idlePhase: Math.random() * Math.PI * 2
     }
@@ -275,29 +273,17 @@ export default class Boat {
   }
 
   paddle(side) {
-    // Trigger diagonal pair (pair 0: front-left + back-right, pair 1: front-right + back-left)
-    const pairIndex = side === 'left' ? 0 : 1
+    // All paddlers on the given side stroke together
     for (const p of this.paddlers) {
-      if (p.pair === pairIndex) {
+      if (p.side === side) {
         p.phase = 1
       }
     }
 
+    // Left paddles in water → boat turns right, and vice versa
     this.heading += side === 'left' ? HEADING_NUDGE : -HEADING_NUDGE
     this.spawnSplash(side)
     return true
-  }
-
-  misStroke(side) {
-    // Fumbled stroke — shorter, jerkier animation on the wrong pair
-    const pairIndex = side === 'left' ? 0 : 1
-    for (const p of this.paddlers) {
-      if (p.pair === pairIndex) {
-        p.phase = 0.4
-      }
-    }
-    this.heading += side === 'left' ? MIS_STROKE_YAW : -MIS_STROKE_YAW
-    this.spawnSplash(side, 2)
   }
 
   applyDrift(amount, delta) {

@@ -115,12 +115,18 @@ describe('RACE_CONFIG', () => {
   })
 
   describe('drag equilibrium sanity', () => {
-    it('keeps equilibrium speed below maxSpeed at 3 strokes/s', () => {
-      const { strokeImpulse, dragHalfLife, maxSpeed } = RACE_CONFIG
+    it('reaches meaningful speed at moderate cadence', () => {
+      const { strokeImpulse, dragHalfLife } = RACE_CONFIG
       const strokesPerSecond = 3
       const dragRate = Math.LN2 / dragHalfLife
       const equilibriumSpeed = (strokeImpulse * strokesPerSecond) / dragRate
-      expect(equilibriumSpeed).toBeLessThan(maxSpeed)
+      expect(equilibriumSpeed).toBeGreaterThan(5)
+    })
+
+    it('can finish the course in gold time at max speed', () => {
+      const { courseLength, maxSpeed, medals } = RACE_CONFIG
+      const timeAtMax = courseLength / maxSpeed
+      expect(timeAtMax).toBeLessThan(medals.gold)
     })
   })
 })

@@ -1,16 +1,16 @@
 export const RACE_CONFIG = {
   courseLength: 200,
-  strokeImpulse: 1.15,
-  dragHalfLife: 1.4,
-  paddleCooldown: 0.22,
+  strokeImpulse: 2.0,
+  dragHalfLife: 2.2,
+  paddleCooldown: 0.18,
   inputBuffer: 0.08,
-  maxSpeed: 11,
+  maxSpeed: 14,
 
   flow: {
-    band: [0.26, 0.44],
-    gain: 0.125,
-    loss: 0.35,
-    maxBonus: 0.35
+    band: [0.2, 0.5],
+    gain: 0.15,
+    loss: 0.2,
+    maxBonus: 0.25
   },
 
   waves: {

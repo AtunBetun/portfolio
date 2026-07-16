@@ -16,8 +16,6 @@ const COURSE_HEADING = Math.PI
 const RACE_GROUP_POSITION = new THREE.Vector3(0, -0.4, -25)
 const PACE_TIME = 34
 const BEHIND_PACE_DRAG_MULT = 1.2
-const MIS_STROKE_SPEED_FACTOR = 0.96
-const MIS_STROKE_SHAKE = 0.1
 const PERFECT_FLOW_BONUS = 0.3
 const SLOWMO_SCALE = 0.25
 const SLOWMO_DURATION = 0.6
@@ -296,14 +294,7 @@ export class CayucoRace {
   handleInput(side) {
     if (this.state !== 'racing' || this.finishSequenceActive) return
 
-    // Same-side paddling is a mis-stroke — it costs you
-    if (side === this.lastPaddleSide) {
-      this.misStroke(side)
-      return
-    }
-
     if (this.paddleCooldown > 0) {
-      // Buffer inputs landing just before the cooldown expires
       if (this.paddleCooldown < RACE_CONFIG.inputBuffer) {
         this.bufferedInput = side
       }
@@ -316,13 +307,14 @@ export class CayucoRace {
     this.speed += RACE_CONFIG.strokeImpulse * (1 + this.flow * RACE_CONFIG.flow.maxBonus)
     this.speed = Math.min(this.speed, RACE_CONFIG.maxSpeed)
 
-    // Rhythm check — inter-stroke gap inside the band builds flow
+    // Rhythm check — alternating AND on-beat builds flow, same-side is neutral
     if (this.lastStrokeTime !== null) {
       const gap = this.raceTime - this.lastStrokeTime
       const [bandMin, bandMax] = RACE_CONFIG.flow.band
-      if (gap >= bandMin && gap <= bandMax) {
+      const alternated = side !== this.lastPaddleSide
+      if (alternated && gap >= bandMin && gap <= bandMax) {
         this.flow = Math.min(1, this.flow + RACE_CONFIG.flow.gain)
-      } else {
+      } else if (gap > bandMax) {
         this.flow = Math.max(0, this.flow - RACE_CONFIG.flow.loss)
       }
     }
@@ -336,13 +328,6 @@ export class CayucoRace {
     if (this.timingRing.active) {
       this.timingRing.judge()
     }
-  }
-
-  misStroke(side) {
-    this.boat.misStroke(side)
-    this.speed *= MIS_STROKE_SPEED_FACTOR
-    this.flow = Math.max(0, this.flow - RACE_CONFIG.flow.loss)
-    this.raceCamera.kick('bad', MIS_STROKE_SHAKE)
   }
 
   handleTimingInput() {
