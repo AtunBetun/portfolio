@@ -26,6 +26,15 @@ export default class Camera {
     this.playerMoving = false
     this.playerVy = 0
 
+    this._direction = new THREE.Vector3(0, 0, -1)
+    this.__dirTarget = new THREE.Vector3(0, 0, -1)
+
+    this._desired = new THREE.Vector3()
+    this._lookAt = new THREE.Vector3()
+    this._lookOrigin = new THREE.Vector3()
+    this._toDesired = new THREE.Vector3()
+    this._dirNorm = new THREE.Vector3()
+
     this.instance = new THREE.PerspectiveCamera(
       55,
       window.innerWidth / window.innerHeight,
@@ -45,7 +54,7 @@ export default class Camera {
     const dir = this.direction
     const breathe = Math.sin(this.elapsed * 1.2) * 0.05
 
-    const desired = new THREE.Vector3(
+    const desired = this._desired.set(
       this.target.x - dir.x * CAM.distance,
       this.target.y + CAM.height + breathe,
       this.target.z - dir.z * CAM.distance
@@ -64,7 +73,7 @@ export default class Camera {
 
     this.instance.position.copy(this.currentPos)
 
-    const lookAt = new THREE.Vector3(
+    const lookAt = this._lookAt.set(
       this.target.x + dir.x * CAM.lookAhead,
       this.target.y + 1.2,
       this.target.z + dir.z * CAM.lookAhead
@@ -77,11 +86,11 @@ export default class Camera {
   applyOcclusion(delta, desired) {
     if (!this.game.physics) return
 
-    const lookOrigin = new THREE.Vector3(this.target.x, this.target.y + 1.2, this.target.z)
-    const toDesired = new THREE.Vector3().subVectors(desired, lookOrigin)
+    const lookOrigin = this._lookOrigin.set(this.target.x, this.target.y + 1.2, this.target.z)
+    const toDesired = this._toDesired.subVectors(desired, lookOrigin)
     const fullDist = toDesired.length()
     if (fullDist < 0.1) return
-    const dirNorm = toDesired.clone().divideScalar(fullDist)
+    const dirNorm = this._dirNorm.copy(toDesired).divideScalar(fullDist)
 
     const origin = { x: lookOrigin.x, y: lookOrigin.y, z: lookOrigin.z }
     const direction = { x: dirNorm.x, y: dirNorm.y, z: dirNorm.z }
@@ -98,8 +107,7 @@ export default class Camera {
     }
 
     if (this.occlusionDist < fullDist) {
-      const pulled = lookOrigin.clone().add(dirNorm.multiplyScalar(this.occlusionDist))
-      this.currentPos.copy(pulled)
+      this.currentPos.copy(lookOrigin).addScaledVector(dirNorm, this.occlusionDist)
     }
   }
 
@@ -115,7 +123,7 @@ export default class Camera {
   }
 
   get direction() {
-    return this._direction || new THREE.Vector3(0, 0, -1)
+    return this._direction
   }
 
   set direction(_val) {
@@ -123,15 +131,10 @@ export default class Camera {
   }
 
   get _dirTarget() {
-    return this.__dirTarget || new THREE.Vector3(0, 0, -1)
+    return this.__dirTarget
   }
 
   set _dirTarget(val) {
-    if (!this._direction) {
-      this._direction = val.clone()
-      this.__dirTarget = val
-      return
-    }
     this.__dirTarget = val
     const t = 1 - Math.exp(-CAM.dirK * (this.game.ticker?.delta || 1 / 60))
     this._direction.lerp(val, t)

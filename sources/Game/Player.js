@@ -43,6 +43,11 @@ export default class Player {
     this.squash = 0
     this.edgeLeanAmount = 0
 
+    this._raw = new THREE.Vector3()
+    this._camForward = new THREE.Vector3()
+    this._camRight = new THREE.Vector3()
+    this._input = new THREE.Vector3()
+
     this.mesh = this.createMesh()
     this.game.scene.add(this.mesh)
 
@@ -121,7 +126,7 @@ export default class Player {
     const touch = this.game.touch
     this.elapsed += delta
 
-    const raw = new THREE.Vector3()
+    const raw = this._raw.set(0, 0, 0)
     if (touch && touch.active && (touch.direction.x !== 0 || touch.direction.z !== 0)) {
       raw.x = touch.direction.x
       raw.z = touch.direction.z
@@ -134,15 +139,15 @@ export default class Player {
 
     if (raw.lengthSq() > 0) raw.normalize()
 
-    const camForward = new THREE.Vector3()
+    const camForward = this._camForward
     this.game.camera.instance.getWorldDirection(camForward)
     camForward.y = 0
     camForward.normalize()
 
-    const camRight = new THREE.Vector3()
-    camRight.crossVectors(camForward, new THREE.Vector3(0, 1, 0)).normalize()
+    const camRight = this._camRight
+    camRight.crossVectors(camForward, { x: 0, y: 1, z: 0 }).normalize()
 
-    const input = new THREE.Vector3()
+    const input = this._input.set(0, 0, 0)
     input.addScaledVector(camRight, raw.x)
     input.addScaledVector(camForward, -raw.z)
 
@@ -237,10 +242,6 @@ export default class Player {
     }
 
     this.verticalVelocity = Math.max(this.verticalVelocity - g * delta, T.terminalVelocity)
-
-    if (this.grounded && this.verticalVelocity < 0) {
-      this.verticalVelocity = T.groundStick
-    }
 
     const moveX = this.horizVel.x * delta
     const moveZ = this.horizVel.y * delta
