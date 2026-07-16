@@ -217,13 +217,18 @@ export default class Player {
     this.horizVel.x = moveToward(this.horizVel.x, targetX, rate * delta)
     this.horizVel.y = moveToward(this.horizVel.y, targetZ, rate * delta)
 
-    this.coyoteTimer = this.grounded ? T.coyoteTime : this.coyoteTimer - delta
-    this.bufferTimer = jumpJustPressed ? T.jumpBuffer : this.bufferTimer - delta
+    const jump = stepJumpWindows({
+      grounded: this.grounded,
+      jumpJustPressed,
+      coyoteTimer: this.coyoteTimer,
+      bufferTimer: this.bufferTimer,
+      delta
+    })
+    this.coyoteTimer = jump.coyoteTimer
+    this.bufferTimer = jump.bufferTimer
 
-    if (this.bufferTimer > 0 && this.coyoteTimer > 0) {
+    if (jump.shouldJump) {
       this.verticalVelocity = T.jumpSpeed
-      this.bufferTimer = 0
-      this.coyoteTimer = 0
       this.events.trigger('player:jump')
     }
 
@@ -324,33 +329,23 @@ export default class Player {
 
   getBushSpeedMultiplier() {
     if (!this.game.world) return 1
-    const px = this.mesh.position.x
-    const py = this.mesh.position.y
-    const pz = this.mesh.position.z
-    if (py < -0.15) return 0.55
-    for (const b of this.game.world.bushes) {
-      if ((px - b.x) ** 2 + (pz - b.z) ** 2 < (b.r + 0.3) ** 2) {
-        return 0.55
-      }
-    }
-    return 1
+    return computeBushMultiplier(
+      this.mesh.position.x,
+      this.mesh.position.y,
+      this.mesh.position.z,
+      this.game.world.bushes
+    )
   }
 
   updateState(inputActive) {
-    const T = TUNING
     const horizSpeed = Math.sqrt(this.horizVel.x ** 2 + this.horizVel.y ** 2)
-
-    if (!this.wasGrounded && this.grounded) {
-      this.state = 'land'
-    } else if (this.grounded) {
-      this.state = inputActive && horizSpeed > 0.1 ? 'run' : 'idle'
-    } else if (this.verticalVelocity > T.apexThreshold) {
-      this.state = 'jump'
-    } else if (Math.abs(this.verticalVelocity) <= T.apexThreshold) {
-      this.state = 'apex'
-    } else {
-      this.state = 'fall'
-    }
+    this.state = computePlayerState({
+      wasGrounded: this.wasGrounded,
+      grounded: this.grounded,
+      inputActive,
+      horizSpeed,
+      verticalVelocity: this.verticalVelocity
+    })
   }
 
   animateLegs(moving) {
@@ -377,14 +372,48 @@ export default class Player {
   }
 }
 
-function moveToward(current, target, maxDelta) {
+export function moveToward(current, target, maxDelta) {
   if (Math.abs(target - current) <= maxDelta) return target
   return current + Math.sign(target - current) * maxDelta
 }
 
-function dampAngle(current, target, t) {
+export function dampAngle(current, target, t) {
   let diff = target - current
   while (diff > Math.PI) diff -= Math.PI * 2
   while (diff < -Math.PI) diff += Math.PI * 2
   return current + diff * t
+}
+
+export function stepJumpWindows({ grounded, jumpJustPressed, coyoteTimer, bufferTimer, delta }) {
+  const T = TUNING
+  coyoteTimer = grounded ? T.coyoteTime : coyoteTimer - delta
+  bufferTimer = jumpJustPressed ? T.jumpBuffer : bufferTimer - delta
+
+  let shouldJump = false
+  if (bufferTimer > 0 && coyoteTimer > 0) {
+    shouldJump = true
+    bufferTimer = 0
+    coyoteTimer = 0
+  }
+
+  return { coyoteTimer, bufferTimer, shouldJump }
+}
+
+export function computeBushMultiplier(px, py, pz, bushes) {
+  if (py < -0.15) return 0.55
+  for (const b of bushes) {
+    if ((px - b.x) ** 2 + (pz - b.z) ** 2 < (b.r + 0.3) ** 2) {
+      return 0.55
+    }
+  }
+  return 1
+}
+
+export function computePlayerState({ wasGrounded, grounded, inputActive, horizSpeed, verticalVelocity }) {
+  const T = TUNING
+  if (!wasGrounded && grounded) return 'land'
+  if (grounded) return inputActive && horizSpeed > 0.1 ? 'run' : 'idle'
+  if (verticalVelocity > T.apexThreshold) return 'jump'
+  if (Math.abs(verticalVelocity) <= T.apexThreshold) return 'apex'
+  return 'fall'
 }

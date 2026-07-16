@@ -217,7 +217,7 @@ function buildAmbientParticles(group, grid) {
   }
 }
 
-function hashFloat(a, b) {
+export function hashFloat(a, b) {
   let h = (a * 374761393 + b * 668265263) | 0
   h = ((h ^ (h >>> 13)) * 1274126177) | 0
   h = h ^ (h >>> 16)
