@@ -1,5 +1,5 @@
 export const RACE_CONFIG = {
-  courseLength: 450,
+  courseLength: 700,
   strokeImpulse: 2.0,
   dragHalfLife: 2.2,
   paddleCooldown: 0.18,
@@ -31,9 +31,9 @@ export const RACE_CONFIG = {
   },
 
   medals: {
-    gold: 52,
-    silver: 58,
-    bronze: 65
+    gold: 62,
+    silver: 70,
+    bronze: 80
   },
 
   drift: {

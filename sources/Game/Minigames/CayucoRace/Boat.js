@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { toon } from '../../Rendering/ToonMaterials.js'
+import { RACE_CONFIG } from '../../../../data/race-config.js'
 
 const HULL_LENGTH = 5
 const HULL_HALF = HULL_LENGTH / 2
@@ -105,12 +106,12 @@ export default class Boat {
     orn.rotation.x = -Math.PI / 4
     boat.add(orn)
 
-    // 4 Paddlers in single file — alternating paddle sides
+    // 4 Paddlers in single file — all paddle whichever side is called
     const seats = [
-      { x: 0, z: 1.5, side: 'left' },
-      { x: 0, z: 0.5, side: 'right' },
-      { x: 0, z: -0.5, side: 'left' },
-      { x: 0, z: -1.5, side: 'right' }
+      { x: 0, z: 1.5 },
+      { x: 0, z: 0.5 },
+      { x: 0, z: -0.5 },
+      { x: 0, z: -1.5 }
     ]
 
     for (const seat of seats) {
@@ -138,9 +139,11 @@ export default class Boat {
     head.position.y = 0.32
     group.add(head)
 
-    // Paddle pivot at shoulder
+    // Paddle pivot — placed on the side that's being stroked.
+    // With heading PI the boat faces -Z, so positive local X is screen-left.
+    // We create the pivot at neutral and reposition it dynamically in paddle().
     const pivot = new THREE.Group()
-    pivot.position.set(seat.side === 'left' ? 0.15 : -0.15, 0.24, 0)
+    pivot.position.set(0.15, 0.24, 0)
 
     const shaftGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.7, 5)
     const shaft = new THREE.Mesh(shaftGeo, toon('wood'))
@@ -157,7 +160,7 @@ export default class Boat {
     return {
       group,
       pivot,
-      side: seat.side,
+      activeSide: 'left',
       phase: 0,
       idlePhase: Math.random() * Math.PI * 2
     }
@@ -235,7 +238,7 @@ export default class Boat {
         // Active stroke animation
         p.phase = Math.max(0, p.phase - delta / STROKE_ANIM_DURATION)
         const swing = Math.sin(p.phase * Math.PI)
-        const sign = p.side === 'left' ? -1 : 1
+        const sign = p.activeSide === 'left' ? -1 : 1
         p.pivot.rotation.z = sign * swing * 0.9
         p.pivot.rotation.x = swing * 0.5
       } else {
@@ -249,11 +252,7 @@ export default class Boat {
 
     // Wake emission — rate proportional to speed
     if (this.speed > 1) {
-      const wakeRate = THREE.MathUtils.lerp(
-        0.3,
-        0.1,
-        (this.speed - 1) / (RACE_CONFIG_MAX_SPEED - 1)
-      )
+      const wakeRate = THREE.MathUtils.lerp(0.3, 0.1, (this.speed - 1) / (RACE_CONFIG.maxSpeed - 1))
       this.wakeTimer += delta
       if (this.wakeTimer >= wakeRate) {
         this.wakeTimer = 0
@@ -273,16 +272,18 @@ export default class Boat {
   }
 
   paddle(side) {
-    // All paddlers on the given side stroke together
+    // ALL paddlers stroke together on the called side.
+    // Move the paddle pivot to the correct screen-side:
+    // heading PI means positive local X = screen-left.
+    const pivotX = side === 'left' ? 0.15 : -0.15
     for (const p of this.paddlers) {
-      if (p.side === side) {
-        p.phase = 1
-      }
+      p.phase = 1
+      p.activeSide = side
+      p.pivot.position.x = pivotX
     }
 
     // Left paddles in water → boat turns right, and vice versa.
-    // With the course heading of PI (facing -Z), decreasing heading
-    // veers screen-right and increasing veers screen-left.
+    // With heading PI (facing -Z), decreasing heading veers screen-right.
     this.heading += side === 'left' ? -HEADING_NUDGE : HEADING_NUDGE
     this.spawnSplash(side)
     return true
@@ -445,5 +446,3 @@ export default class Boat {
     }
   }
 }
-
-const RACE_CONFIG_MAX_SPEED = 11

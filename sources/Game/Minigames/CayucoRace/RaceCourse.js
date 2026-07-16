@@ -23,11 +23,11 @@ export default class RaceCourse {
     const length = this.courseLength
     const points = [
       new THREE.Vector3(0, 0, 0),
-      new THREE.Vector3(0, 0, -length * 0.2),
-      new THREE.Vector3(20, 0, -length * 0.35),
-      new THREE.Vector3(20, 0, -length * 0.5),
-      new THREE.Vector3(-15, 0, -length * 0.7),
-      new THREE.Vector3(-15, 0, -length * 0.85),
+      new THREE.Vector3(0, 0, -length * 0.15),
+      new THREE.Vector3(25, 0, -length * 0.3),
+      new THREE.Vector3(25, 0, -length * 0.45),
+      new THREE.Vector3(-20, 0, -length * 0.6),
+      new THREE.Vector3(-20, 0, -length * 0.8),
       new THREE.Vector3(0, 0, -length)
     ]
     return new THREE.CatmullRomCurve3(points)
