@@ -338,16 +338,281 @@ for (const b of world.bushes)
 
 Each phase is independently shippable. Dependencies: Phase 2 requires Phase 1, Phase 3 requires Phase 1, Phase 4 requires Phase 2.
 
-## Open Questions for Human Review (Gate 1)
+---
 
-1. **Island terrain:** Flat 50x50 slab with hard edges is kept. Do you want a heightfield beach/cliff island (single height function feeding mesh + collider, ~14 h extra) as a follow-up bead, or is the flat edge acceptable long-term?
+## Phase 5: Heightfield Island Terrain — ~12 hours
+
+> **Decision:** Human approved heightfield island (Gate 1 Q1). This phase replaces the flat `cuboid(25,0.5,25)` ground with a shaped island driven by one analytic height function feeding both the Rapier collider and the Three.js mesh.
+
+### Summary
+
+Replace the flat 50x50 slab with "Anchor Isle" — a Wind Waker-style island with a flat central plateau (hub content unchanged), rolling hills in a ring around it, sandy beach sloping to water, and one dramatic NW headland bluff. Single deterministic `terrainHeight(x, z)` function drives everything: physics collider, visual mesh, and prop Y-snapping. Player runs off the beach into the sea and falls to the kill plane — no invisible walls, no skirts.
+
+### Island Profile
+
+```
+Cross-section along +x (no headland):
+
+  summit 2.87 ╮
+              │ headland (NW only)
+    y=0 ──────┤─────────────── plateau (r < 10) ──────────────┤
+              │                                                │
+              │         ±0.4 rolling hills (r 10–16.5)        │
+              │                                                ├── beach start r=16.5
+              │                                                │    slope 5–15°
+  waterline   │                                    ┄┄┄┄┄┄┄┄┄┄┤── r≈18.6, y=−0.45
+  y=−0.45     │                                                │
+              │                                   wading shelf │── r 18.6–22.5, y=−0.9
+              │                                                │
+              │                                     rim plunge ├── r 22.5–25
+              │                                                │    drops to −12
+  killPlane   │                                                │
+  y=−10  ─────┴────────────────────────────────────────────────┘
+```
+
+**Headline numbers:**
+- Plateau: flat (exactly y=0) inside r=10
+- Hills band: r=10–16.5, amplitude ±0.4u, three sine octaves
+- Beach: starts r=16.5, drops 0.9u over 5u (5–15 degrees)
+- Waterline: r≈18.6 where terrain crosses y=−0.45
+- Wading shelf: r=18.6–22.5, depth 0.35–0.45u (knee height)
+- Rim plunge: r=22.5–25, drops from −0.9 to −12 (sea floor)
+- Headland summit: y=2.87 at (−12.5, −12.5), approach slope 34 degrees, sea face 82 degrees
+- Max walkable slope: 35.7 degrees (well under 50 degree climb limit)
+- Kill plane: y=−10 (unchanged from Phase 1)
+
+### Height Function
+
+Lives in `data/terrain.js` (Three-free data layer, importable by both Physics.js and World.js):
+
+```js
+export const TERRAIN = {
+  size: 50,
+  res: 64,            // cells per side (65x65 samples)
+  heightScale: 1,     // store world-unit heights directly
+  plateauR: 10,
+  hillsIn: 10, hillsInFull: 12.5, hillsOutStart: 14.5, hillsOut: 16.5,
+  beachStart: 16.5, beachEnd: 21.5, beachDrop: 0.9,
+  rimStart: 22.5, rimEnd: 25, seaFloorY: -12,
+  waterY: -0.45,
+  head: { x: -12.5, z: -12.5, R: 7, H: 3.0 },
+}
+
+const S = (a, b, x) => {
+  const t = Math.min(Math.max((x - a) / (b - a), 0), 1)
+  return t * t * (3 - 2 * t)
+}
+
+export function terrainHeight(x, z) {
+  const r = Math.hypot(x, z)
+  const T = TERRAIN
+
+  // Beach ramp: plateau 0 → sand shelf −0.9
+  const beach = -T.beachDrop * S(T.beachStart, T.beachEnd, r)
+
+  // Rim plunge: shelf −0.9 → sea floor −12
+  const rim = (T.seaFloorY + T.beachDrop) * S(T.rimStart, T.rimEnd, r)
+
+  // Rolling hills, ring-banded, three octaves
+  const d = Math.hypot(x - T.head.x, z - T.head.z)
+  const band     = S(T.hillsIn, T.hillsInFull, r) * (1 - S(T.hillsOutStart, T.hillsOut, r))
+  const corridor = S(2.5, 5, Math.abs(z))
+  const headGate = S(7, 9.5, d)
+  const hills = band * corridor * headGate * (
+    0.30 * Math.sin(0.35 * x + 1.7) * Math.cos(0.31 * z - 0.6) +
+    0.16 * Math.sin(0.71 * x - 2.1) * Math.cos(0.67 * z + 1.3) +
+    0.07 * Math.sin(1.31 * x + 0.5) * Math.cos(1.23 * z))
+
+  // Vantage headland: raised-cosine bump
+  const bump = d < T.head.R
+    ? T.head.H * (0.5 + 0.5 * Math.cos(Math.PI * d / T.head.R))
+    : 0
+
+  return beach + rim + hills + bump
+}
+```
+
+**Design rationale:**
+- `corridor` gate keeps |z| < 2.5 dead flat (letters run E–W along z=0)
+- `headGate` prevents hill octaves from stacking on the headland flank (without it, max slope hit 42.7 degrees)
+- Three non-integer-ratio frequencies (0.35 / 0.71 / 1.31) prevent visible tiling
+- Smoothstep saturation handles square grid corners: at r >= 25 all returns −12
+
+### Heightfield Grid + `sampleHeight`
+
+Also in `data/terrain.js`:
+
+```js
+export function buildHeightGrid() {
+  const { size, res } = TERRAIN
+  const heights = new Float32Array((res + 1) * (res + 1))
+  for (let col = 0; col <= res; col++) {
+    for (let row = 0; row <= res; row++) {
+      const x = (col / res - 0.5) * size
+      const z = (row / res - 0.5) * size
+      heights[col * (res + 1) + row] = terrainHeight(x, z)
+    }
+  }
+  return heights
+}
+
+export function sampleHeight(heights, x, z) {
+  const { size, res } = TERRAIN
+  const fx = (x / size + 0.5) * res
+  const fz = (z / size + 0.5) * res
+  const cx = Math.min(Math.max(Math.floor(fx), 0), res - 1)
+  const cz = Math.min(Math.max(Math.floor(fz), 0), res - 1)
+  const u = fx - cx, v = fz - cz
+  const H = (col, row) => heights[col * (res + 1) + row]
+  const h00 = H(cx, cz), h10 = H(cx + 1, cz), h01 = H(cx, cz + 1), h11 = H(cx + 1, cz + 1)
+  return (u + v <= 1)
+    ? h00 + (h10 - h00) * u + (h01 - h00) * v
+    : h11 + (h01 - h11) * (1 - u) + (h10 - h11) * (1 - v)
+}
+```
+
+**Key facts (verified against Rapier 0.14):**
+- `nrows`/`ncols` are CELL counts — `heights.length` must be `(n+1)^2`
+- Layout is column-major: `heights[col * (nrows + 1) + row]`
+- Columns map to X, rows to Z, values to Y
+- Heightfield is centered on the body's translation
+- `scale` = `{ x: 50, y: 1, z: 50 }` (full world dimensions; `scale.y = 1` since heights stored in world units)
+- Triangle split matches Three.js PlaneGeometry's anti-diagonal — collider and mesh are triangle-for-triangle identical
+- `HeightFieldFlags.FIX_INTERNAL_EDGES` fixes dynamic body edge-catch bumps (free, always pass it)
+- Edge falling works out of the box — heightfield is a surface, not a volume; walking off the boundary means no support, gravity takes over
+
+### File Changes
+
+| File | Change |
+|---|---|
+| **NEW** `data/terrain.js` | `TERRAIN` constants, `terrainHeight(x,z)`, `buildHeightGrid()`, `sampleHeight(heights,x,z)` |
+| `data/rooms.js` | Add `waterY: -0.45` (moved from hardcoded in Water.js); keep `killPlaneY: -10`, `playerSpawn` |
+| `sources/Game/Physics.js` | `buildGround()` → `buildTerrain()`: import `buildHeightGrid` + `TERRAIN`, create `ColliderDesc.heightfield(64, 64, heights, {x:50, y:1, z:50}, RAPIER.HeightFieldFlags.FIX_INTERNAL_EDGES)` on a fixed body at origin. Export `this.heightGrid` for prop snapping. Delete the old cuboid ground. |
+| `sources/Game/World/World.js` | Replace `PlaneGeometry(50,50)` floor with `PlaneGeometry(50, 50, 64, 64)`, `rotateX(-PI/2)`, vertex displacement from `terrainHeight`. Use `toNonIndexed()` + `computeVertexNormals()` for faceted toon look. Add vertex colors: grass (h > −0.15, normal.y > cos(22°)), grassDark (steep), sand (−0.15 to −1.2), oceanDeep (below −1.2). |
+| `sources/Game/World/Rooms/HubRoom.js` | All prop placement: `y = sampleHeight(grid, x, z) + offset`. Redesign 3 tree positions onto headland shoulder; redesign 4 rock positions onto beach/slopes. Replace `Math.random()` in bush builder with deterministic hash. |
+| `sources/Game/World/Water.js` | Use `TERRAIN.waterY` from data layer; extend plane to cover full 50x50 (currently might be smaller) |
+| `sources/Game/Camera.js` | No additional changes needed (Phase 4 occlusion already handles terrain blocking) |
+
+### Interaction with Phases 1–4
+
+| Phase | Impact |
+|---|---|
+| Phase 1 | Ground collider changes from `cuboid(25,0.5,25)` to heightfield. KCC config stays identical (verified stable on heightfields). "Capsule edge agrees with grass edge" acceptance criterion becomes "walk off beach → fall into sea → respawn". |
+| Phase 2 | `snapToGround(0.4)` already covers slope traversal at speed 8. `computedGrounded()` works correctly on heightfields (verified). Coyote time fires when walking off the beach rim (intended). |
+| Phase 3 | Dynamic crates on the plateau are unaffected (y=0 there). Crates/letters pushed to the beach slide down the slope naturally (satisfying). Kill-plane reset in prop sync loop handles props that slide into the sea. Bush slowdown: add water-wading slowdown (feet-y < −0.15 → same x0.55 multiplier). |
+| Phase 4 | Camera occlusion ray works against heightfield (it's just another collider). Headland provides natural occlusion test cases. Fall framing engages when running off the beach. |
+
+### Toon Shading Strategy
+
+- **Faceted geometry** (not smooth): `geo.toNonIndexed()` then `computeVertexNormals()` — flat per-triangle normals. Each facet snaps to one toon ramp band, giving a hand-painted low-poly look. Smooth normals would draw wobbly iso-lines across hills.
+- **Vertex colors** by height + slope (one draw call, existing palette):
+  - `h > -0.15, normal.y > cos(22°)` → `PALETTE.grass`
+  - `h > -0.15, normal.y <= cos(22°)` → `PALETTE.grassDark` (slope darkening)
+  - `-0.15 >= h > -1.2` → `PALETTE.sand`
+  - `h <= -1.2` → `PALETTE.oceanDeep`
+- Hard transitions at facet boundaries, no gradient — coherent with the banded toon ramp.
+- Cliff face auto-shades via the slope rule.
+
+### Water Behavior
+
+- Water plane at y=−0.45 with existing wave animation (±0.25) making animated shoreline breathe across r≈18.3–19.2 for free.
+- **Shallow wading** (r 18.6–22.5): water knee-height (0.35–0.45u on 1.2u character). Apply the bush slowdown multiplier (x0.55) when player feet-y < −0.15. No additional death mechanic (deferred to portfolio-ewu).
+- **Deep water** (past r=22.5): terrain drops away, player falls through water to killPlaneY=−10, respawn fires. The fall is visually dramatic (player visibly sinks past the water surface).
+- **For portfolio-ewu upgrade** (later): detect `feet-y < -2.5 && r > 22` for earlier splash/respawn.
+
+### Performance Budget (benchmarked at 64x64)
+
+| Metric | Value |
+|---|---|
+| Heights buffer | 16.5 KiB |
+| Mesh (vertices + normals + vertex colors, non-indexed) | ~350 KiB (~40k triangles) |
+| Collider build time | ~0.1 ms |
+| Per-step + KCC cost | 0.39 ms (vs 0.34 ms for flat cuboid) |
+| Visual frame cost delta | +0.2 ms draw (40k vs 2 tris) |
+
+Well within the 60 fps mobile Playwright budget.
+
+### Testing
+
+**Unit (bun, pure JS — no WASM needed):**
+- `terrainHeight(0, 0) === 0` (plateau center)
+- `terrainHeight(x, z) === 0` for all |x|, |z| < 10 (plateau guarantee)
+- `terrainHeight(25, 0) === TERRAIN.seaFloorY` (rim saturation)
+- `terrainHeight(-12.5, -12.5) === TERRAIN.head.H` (summit)
+- Max slope over full grid < 50 degrees (finite-difference scan at 0.1u)
+- `sampleHeight` agrees with `terrainHeight` at grid sample points within 1e-5
+- `buildHeightGrid().length === (65 * 65)`
+- No `Math.random()` calls in `data/terrain.js`
+
+**E2e (Playwright):**
+- Player spawn at (0, 2, 5) lands on terrain and is grounded within 1s
+- Walk toward +x (east): player goes from grass to beach to water to falling to respawn
+- Walk up headland (NW): player reaches y > 2 without jumping
+- Walk along headland sea face: player slides down (slope > 55 degrees) into the water
+- Props: all tree trunk colliders are at expected heights (mesh position matches sampleHeight)
+- Camera: no clip through headland when orbiting from SE
+
+### Risks
+
+| # | Risk | Mitigation |
+|---|---|---|
+| 1 | KCC ghost collisions at internal triangle edges on steep headland | `FIX_INTERNAL_EDGES` flag + KCC offset 0.03 + capsule roundness mask it (verified in research) |
+| 2 | Props floating on slopes (visual gap between mesh and terrain) | Use triangle-exact `sampleHeight`, not bilinear; sink rocks 0.15 into surface |
+| 3 | Toon outline artifacts on displaced faceted geometry | Faceted normals make outlines cleaner, not worse (silhouette is sharp polygonal edge) |
+| 4 | 40k tri mesh too heavy for low-end mobile | Still 10x below THREE.js draw-call bottleneck; material is unlit vertex-color (cheapest possible) |
+| 5 | Slope stacking from height function composition | Gates (`headGate`, `corridor`) verified to cap at 35.7 degrees |
+| 6 | Beach Math.random() in bush builder breaks determinism | Replace with hash of `(x,z)` coordinates |
+
+### Effort Estimate
+
+| Work item | Hours |
+|---|---|
+| `data/terrain.js` module + unit tests | 2 |
+| Physics.js `buildTerrain()` integration | 2 |
+| World.js visual mesh + vertex colors + faceting | 3 |
+| HubRoom.js prop re-placement + determinism fix | 2 |
+| Water.js adjustments + wading slowdown | 1 |
+| E2e test updates | 2 |
+| **Total** | **~12 h** |
+
+**Dependencies:** Requires Phase 1 (ground collider structure). Independent of Phases 2–4 (they work on any ground shape). Can be implemented as Phase 5 after Phases 1–4, or in parallel with Phases 2–4 after Phase 1 ships.
+
+### Open Questions (Phase 5 specific)
+
+1. **Faceted vs smooth normals?** Spec recommends faceted (matches WW low-poly feel, avoids toon banding artifacts on smooth surfaces). Smooth is also viable if you prefer a softer look.
+2. **Water = wading slowdown only, or add splash particles now?** Plan defers splash VFX to portfolio-ewu. If you want them in Phase 5, add ~2h.
+3. **Headland cliff face: grass-dark or exposed stone?** The slope-darkening rule paints it `grassDark` automatically. Could add a `stone` palette color for `h > 0.3 && normal.y < 0.5` (+30 min).
+
+---
+
+## Updated Effort Summary (with Phase 5)
+
+| Phase | Hours |
+|---|---|
+| Phase 1: Foundation | 4 |
+| Phase 2: Movement feel | 5 |
+| Phase 3: World interactions | 3 |
+| Phase 4: Polish | 4 |
+| **Phase 5: Heightfield island** | **12** |
+| Test updates | 2 |
+| **Total** | **~30 h** |
+
+---
+
+## Remaining Open Questions for Human Review (Gate 1)
+
+1. ~~**Island terrain**~~ — **DECIDED: heightfield island (Phase 5)**
 
 2. **Speed 8 vs 6.5:** Plan keeps 8; surgical argued 6.5 reads more Wind Waker on a 50-unit island. Confirm during the Phase 2 tune loop?
 
-3. **Water splash respawn:** Kill plane teleports instantly at y=-10. Want a 0.6 s splash-fade respawn instead? (+2 h, needs a splash particle.)
+3. **Water splash respawn:** Kill plane teleports instantly at y=-10. Want a 0.6 s splash-fade respawn instead? (+2 h, needs a splash particle — could fold into Phase 5 or defer to portfolio-ewu.)
 
-4. **Phase granularity for beads:** One bead per phase (4 worktrees) or one bead with 4 commits? Recommendation: one bead per phase, Phases 1+2 reviewed together.
+4. **Phase granularity for beads:** One bead per phase (5 worktrees) or one bead with 5 commits? Recommendation: one bead per phase, Phases 1+2 reviewed together, Phase 5 can run in parallel with 2–4.
 
 5. **Fixed-timestep accumulator:** Deliberately cut in favor of delta clamping. Acceptable, or is 120 Hz-display smoothness a requirement? (Accumulator + interpolation ~ +8 h.)
 
 6. **Deferred polish:** Skid state, edge-wobble animation, breakable pots, beach ball, camera trauma shake — park as `spec:idea` beads?
+
+7. **Phase 5: Faceted vs smooth terrain normals?** (Recommend faceted for WW feel.)
+
+8. **Phase 5: Headland cliff material — grassDark or stone palette color?**
