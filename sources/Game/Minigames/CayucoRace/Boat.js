@@ -106,12 +106,12 @@ export default class Boat {
     orn.rotation.x = -Math.PI / 4
     boat.add(orn)
 
-    // 4 Paddlers — diagonal pairs
+    // 4 Paddlers in single file — alternating paddle sides
     const seats = [
-      { x: -0.2, z: 1.2, side: 'left', pair: 0 },
-      { x: 0.2, z: 1.2, side: 'right', pair: 1 },
-      { x: -0.2, z: -1.0, side: 'left', pair: 1 },
-      { x: 0.2, z: -1.0, side: 'right', pair: 0 }
+      { x: 0, z: 1.5, side: 'left', pair: 0 },
+      { x: 0, z: 0.5, side: 'right', pair: 1 },
+      { x: 0, z: -0.5, side: 'left', pair: 1 },
+      { x: 0, z: -1.5, side: 'right', pair: 0 }
     ]
 
     for (const seat of seats) {
@@ -141,7 +141,7 @@ export default class Boat {
 
     // Paddle pivot at shoulder
     const pivot = new THREE.Group()
-    pivot.position.set(seat.side === 'left' ? -0.08 : 0.08, 0.24, 0)
+    pivot.position.set(seat.side === 'left' ? -0.15 : 0.15, 0.24, 0)
 
     const shaftGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.7, 5)
     const shaft = new THREE.Mesh(shaftGeo, toon('wood'))

@@ -77,6 +77,10 @@ export class CayucoRace {
     this.events.on(event, callback)
   }
 
+  getBoatWorldPos() {
+    return this.boat.position.clone().add(this.group.position)
+  }
+
   start() {
     if (this.state !== 'idle') return
 
@@ -145,6 +149,7 @@ export class CayucoRace {
 
     this.finishSequenceActive = false
     this.finishDelay = 0
+    this.controlsHidden = false
 
     this.hud.updateTimer(0)
     this.hud.updateProgress(0)
@@ -188,7 +193,7 @@ export class CayucoRace {
     this.waveSystem.update(delta, this.boat.position.z)
     const waveHeight = this.waveSystem.getHeightAt(this.boat.position.x, this.boat.position.z)
     this.boat.update(0, (x, z) => this.waveSystem.getHeightAt(x, z))
-    this.raceCamera.update(delta, this.boat.position, this.boat.heading, waveHeight, 0)
+    this.raceCamera.update(delta, this.getBoatWorldPos(), this.boat.heading, waveHeight, 0)
   }
 
   updateRacing(delta) {
@@ -202,6 +207,12 @@ export class CayucoRace {
       if (this.raceTime > GO_DISPLAY_DURATION && this.lastCountdownNumber !== null) {
         this.hud.hideCountdown()
         this.lastCountdownNumber = null
+      }
+
+      // Fade out controls hint after 3 seconds
+      if (this.raceTime > 3 && !this.controlsHidden) {
+        this.controlsHidden = true
+        this.hud.hideControls()
       }
     }
 
@@ -260,7 +271,7 @@ export class CayucoRace {
     }
 
     const waveHeight = this.waveSystem.getHeightAt(this.boat.position.x, this.boat.position.z)
-    this.raceCamera.update(dt, this.boat.position, this.boat.heading, waveHeight, this.speed)
+    this.raceCamera.update(dt, this.getBoatWorldPos(), this.boat.heading, waveHeight, this.speed)
 
     this.hud.updateTimer(this.finishSequenceActive ? this.finishTime : this.raceTime)
     this.hud.updateProgress(progress)

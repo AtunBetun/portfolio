@@ -92,6 +92,7 @@ export default class RaceHUD {
     this.buildCombo()
     this.buildBanner()
     this.buildCountdown()
+    this.buildControls()
     this.buildRhythmIcons()
     this.buildResults()
 
@@ -226,6 +227,30 @@ export default class RaceHUD {
       display: 'none'
     })
     this.container.appendChild(this.countdownEl)
+  }
+
+  buildControls() {
+    this.controlsEl = document.createElement('div')
+    Object.assign(this.controlsEl.style, {
+      position: 'absolute',
+      bottom: '72px',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      fontSize: '14px',
+      color: '#ffffff',
+      opacity: '0.9',
+      textShadow: '0 1px 4px rgba(0, 0, 0, 0.8)',
+      whiteSpace: 'nowrap',
+      transition: 'opacity 0.6s ease'
+    })
+    this.controlsEl.textContent = '← → or A/D to paddle  •  SPACE on waves'
+    this.container.appendChild(this.controlsEl)
+  }
+
+  hideControls() {
+    if (this.controlsEl) {
+      this.controlsEl.style.opacity = '0'
+    }
   }
 
   buildRhythmIcons() {
