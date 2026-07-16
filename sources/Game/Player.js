@@ -40,6 +40,8 @@ export default class Player {
     this.jumpHeld = false
     this.jumpPressedLastFrame = false
     this.state = 'idle'
+    this.squash = 0
+    this.edgeLeanAmount = 0
 
     this.mesh = this.createMesh()
     this.game.scene.add(this.mesh)
@@ -172,10 +174,16 @@ export default class Player {
       )
     }
 
+    this.updateSquash(delta)
+    this.updateEdgeLean(delta, inputActive)
     this.animateLegs(inputActive, delta)
 
     this.trail.position.set(this.mesh.position.x, 0.1, this.mesh.position.z)
-    this.game.camera.follow(this.mesh.position, inputActive ? this.direction : null)
+    this.game.camera.follow(
+      this.mesh.position,
+      inputActive ? this.direction : null,
+      this.verticalVelocity
+    )
 
     this.updateState(inputActive)
 
@@ -264,12 +272,53 @@ export default class Player {
       this.verticalVelocity = T.groundStick
     }
 
+    if (!this.wasGrounded && this.grounded) {
+      const impactSpeed = Math.abs(this.lastVerticalVelocity || 0)
+      if (impactSpeed > 6) {
+        this.squash = Math.min(impactSpeed / 20, 0.35)
+        this.events.trigger('player:land', {
+          speed: impactSpeed,
+          position: { x: newPos.x, y: newPos.y, z: newPos.z }
+        })
+      }
+    }
+
+    this.lastVerticalVelocity = this.verticalVelocity
     this.mesh.position.set(newPos.x, newPos.y, newPos.z)
 
     if (newPos.y < WORLD_LAYOUT.killPlaneY) {
       const spawn = WORLD_LAYOUT.playerSpawn
       this.teleport(spawn.x, spawn.y, spawn.z)
     }
+  }
+
+  updateSquash(delta) {
+    if (this.squash > 0.001) {
+      this.squash *= Math.exp(-12 * delta)
+      if (this.squash < 0.001) this.squash = 0
+    }
+    this.mesh.scale.set(1 + this.squash * 0.6, 1 - this.squash, 1 + this.squash * 0.6)
+  }
+
+  updateEdgeLean(delta, inputActive) {
+    if (!this.grounded || inputActive || !this.game.physics) {
+      this.edgeLeanAmount *= Math.exp(-8 * delta)
+      this.mesh.rotation.x = this.edgeLeanAmount
+      return
+    }
+
+    const facingX = Math.sin(this.mesh.rotation.y)
+    const facingZ = Math.cos(this.mesh.rotation.y)
+    const probeX = this.mesh.position.x + facingX * 0.35
+    const probeZ = this.mesh.position.z + facingZ * 0.35
+    const origin = { x: probeX, y: this.mesh.position.y + 0.1, z: probeZ }
+    const down = { x: 0, y: -1, z: 0 }
+    const hit = this.game.physics.castRay(origin, down, 0.5, this.collider)
+
+    const targetLean = hit ? 0 : 0.08
+    const wobble = hit ? 0 : Math.sin(this.elapsed * 2 * Math.PI) * 0.02
+    this.edgeLeanAmount += (targetLean + wobble - this.edgeLeanAmount) * (1 - Math.exp(-6 * delta))
+    this.mesh.rotation.x = this.edgeLeanAmount
   }
 
   getBushSpeedMultiplier() {
@@ -321,6 +370,7 @@ export default class Player {
     this.horizVel.set(0, 0)
     this.coyoteTimer = 0
     this.bufferTimer = 0
+    this.squash = 0
   }
 }
 

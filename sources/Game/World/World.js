@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import Game from '../Game.js'
 import PhysicsLetters from './PhysicsLetters.js'
 import Water from './Water.js'
+import DustPuff from './DustPuff.js'
 import { WORLD_LAYOUT } from '../../../data/rooms.js'
 import { buildHubProps } from './Rooms/HubRoom.js'
 import { toonFlat } from '../Rendering/ToonMaterials.js'
@@ -28,6 +29,7 @@ export default class World {
     this.physicsLetters.load()
 
     this.water = new Water(this.group)
+    this.dustPuff = new DustPuff(this.group)
 
     this.game.scene.add(this.group)
     this.game.ticker.events.on('tick', (_delta, elapsed) => this.update(elapsed), 5)
