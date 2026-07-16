@@ -39,4 +39,16 @@ describe('world layout', () => {
     const ids = WORLD_LAYOUT.zones.map((z) => z.id)
     expect(new Set(ids).size).toBe(ids.length)
   })
+
+  it('killPlaneY is negative', () => {
+    expect(WORLD_LAYOUT.killPlaneY).toBeLessThan(0)
+  })
+
+  it('playerSpawn.y is positive', () => {
+    expect(WORLD_LAYOUT.playerSpawn.y).toBeGreaterThan(0)
+  })
+
+  it('floorSize is 50', () => {
+    expect(WORLD_LAYOUT.floorSize).toBe(50)
+  })
 })

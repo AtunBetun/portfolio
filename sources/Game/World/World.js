@@ -1,6 +1,5 @@
 import * as THREE from 'three'
 import Game from '../Game.js'
-// import Collectible from './Collectible.js'
 import PhysicsLetters from './PhysicsLetters.js'
 import Water from './Water.js'
 import { WORLD_LAYOUT } from '../../../data/rooms.js'
@@ -15,10 +14,15 @@ export default class World {
     this.activeRoomId = 'hub'
     this.collectiblesCollected = 0
     this.totalCollectibles = 0
+    this.dynamicProps = []
+    this.bushes = []
 
     this.buildFloor()
-    this.buildBoundaryWalls()
-    buildHubProps(this.group, this.game.physics)
+    const hubData = buildHubProps(this.group, this.game.physics)
+    if (hubData) {
+      this.dynamicProps = hubData.dynamicProps || []
+      this.bushes = hubData.bushes || []
+    }
 
     this.physicsLetters = new PhysicsLetters(this.group)
     this.physicsLetters.load()
@@ -40,19 +44,10 @@ export default class World {
     this.group.add(floor)
   }
 
-  buildBoundaryWalls() {
-    if (!this.game.physics) return
-    const half = WORLD_LAYOUT.floorSize / 2
-    const thickness = 1
-    this.game.physics.createWall(0, -half - thickness / 2, WORLD_LAYOUT.floorSize + 2, thickness)
-    this.game.physics.createWall(0, half + thickness / 2, WORLD_LAYOUT.floorSize + 2, thickness)
-    this.game.physics.createWall(-half - thickness / 2, 0, thickness, WORLD_LAYOUT.floorSize + 2)
-    this.game.physics.createWall(half + thickness / 2, 0, thickness, WORLD_LAYOUT.floorSize + 2)
-  }
-
   enterRoom(roomId) {
     if (roomId === 'hub') {
-      this.game.player.teleport(0, 2, 5)
+      const spawn = WORLD_LAYOUT.playerSpawn
+      this.game.player.teleport(spawn.x, spawn.y, spawn.z)
       this.activeRoomId = 'hub'
     }
   }

@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import Game from './Game.js'
 import { toon } from './Rendering/ToonMaterials.js'
 import { PALETTE } from './Rendering/Palette.js'
+import { WORLD_LAYOUT } from '../../data/rooms.js'
 
 export default class Player {
   constructor() {
@@ -59,7 +60,8 @@ export default class Player {
     this.rightLeg.position.set(0.1, 0.15, 0)
     group.add(this.rightLeg)
 
-    group.position.set(0, 2, 0)
+    const spawn = WORLD_LAYOUT.playerSpawn
+    group.position.set(spawn.x, spawn.y, spawn.z)
     return group
   }
 
@@ -72,10 +74,18 @@ export default class Player {
 
   setupPhysics() {
     const RAPIER = this.game.physics.RAPIER
-    const bodyDesc = RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(0, 2, 0)
+    const spawn = WORLD_LAYOUT.playerSpawn
+    const bodyDesc = RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(
+      spawn.x,
+      spawn.y,
+      spawn.z
+    )
     this.body = this.game.physics.createRigidBody(bodyDesc)
 
-    const colliderDesc = RAPIER.ColliderDesc.capsule(0.25, 0.2).setFriction(0).setRestitution(0)
+    const colliderDesc = RAPIER.ColliderDesc.capsule(0.35, 0.25)
+      .setTranslation(0, 0.6, 0)
+      .setFriction(0)
+      .setRestitution(0)
     this.collider = this.game.physics.createCollider(colliderDesc, this.body)
   }
 
@@ -140,6 +150,11 @@ export default class Player {
       }
 
       this.mesh.position.set(newPos.x, newPos.y, newPos.z)
+
+      if (newPos.y < WORLD_LAYOUT.killPlaneY) {
+        const spawn = WORLD_LAYOUT.playerSpawn
+        this.teleport(spawn.x, spawn.y, spawn.z)
+      }
     } else {
       if (input.lengthSq() > 0) {
         this.mesh.position.x += input.x * this.speed * delta
@@ -176,7 +191,7 @@ export default class Player {
   teleport(x, y, z) {
     this.mesh.position.set(x, y, z)
     if (this.body) {
-      this.body.setNextKinematicTranslation({ x, y, z })
+      this.body.setTranslation({ x, y, z }, true)
     }
     this.verticalVelocity = 0
   }
