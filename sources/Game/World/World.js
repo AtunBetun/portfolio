@@ -60,6 +60,18 @@ export default class World {
       c.checkPickup(playerPos)
     }
 
+    for (const { body, mesh } of this.dynamicProps) {
+      const p = body.translation()
+      const q = body.rotation()
+      mesh.position.set(p.x, p.y, p.z)
+      mesh.quaternion.set(q.x, q.y, q.z, q.w)
+      if (p.y < WORLD_LAYOUT.killPlaneY) {
+        body.setTranslation(mesh.userData.spawn, true)
+        body.setLinvel({ x: 0, y: 0, z: 0 }, true)
+        body.setAngvel({ x: 0, y: 0, z: 0 }, true)
+      }
+    }
+
     if (this.physicsLetters.loaded) {
       this.physicsLetters.update()
     }
