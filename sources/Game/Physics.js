@@ -1,5 +1,5 @@
 import Game from './Game.js'
-import { WORLD_LAYOUT } from '../../data/rooms.js'
+import { TERRAIN, buildHeightGrid } from '../../data/terrain.js'
 
 export const GRAVITY = 22
 
@@ -19,7 +19,8 @@ export default class Physics {
     this.characterController.setCharacterMass(3.0)
     this.characterController.setSlideEnabled(true)
 
-    this.buildGround()
+    this.heightGrid = null
+    this.buildTerrain()
     this.game.ticker.events.on('tick', () => this.update(), 3)
   }
 
@@ -27,13 +28,29 @@ export default class Physics {
     this.world.step()
   }
 
-  buildGround() {
-    const half = WORLD_LAYOUT.floorSize / 2
-    const bodyDesc = this.RAPIER.RigidBodyDesc.fixed().setTranslation(0, -0.5, 0)
+  buildTerrain() {
+    this.heightGrid = buildHeightGrid()
+    const bodyDesc = this.RAPIER.RigidBodyDesc.fixed().setTranslation(0, 0, 0)
     const body = this.world.createRigidBody(bodyDesc)
-    const colliderDesc = this.RAPIER.ColliderDesc.cuboid(half, 0.5, half)
-      .setFriction(0.8)
-      .setRestitution(0)
+
+    const nrows = TERRAIN.res
+    const ncols = TERRAIN.res
+    const scale = { x: TERRAIN.size, y: 1, z: TERRAIN.size }
+
+    let colliderDesc
+    if (this.RAPIER.ColliderDesc.heightfield.length >= 4) {
+      colliderDesc = this.RAPIER.ColliderDesc.heightfield(
+        nrows,
+        ncols,
+        this.heightGrid,
+        scale,
+        this.RAPIER.HeightFieldFlags ? this.RAPIER.HeightFieldFlags.FIX_INTERNAL_EDGES : undefined
+      )
+    } else {
+      colliderDesc = this.RAPIER.ColliderDesc.heightfield(nrows, ncols, this.heightGrid, scale)
+    }
+
+    colliderDesc.setFriction(0.8).setRestitution(0)
     this.world.createCollider(colliderDesc, body)
   }
 

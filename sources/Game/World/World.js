@@ -5,7 +5,8 @@ import Water from './Water.js'
 import DustPuff from './DustPuff.js'
 import { WORLD_LAYOUT } from '../../../data/rooms.js'
 import { buildHubProps } from './Rooms/HubRoom.js'
-import { toonFlat } from '../Rendering/ToonMaterials.js'
+import { TERRAIN, terrainHeight } from '../../../data/terrain.js'
+import { PALETTE } from '../Rendering/Palette.js'
 
 export default class World {
   constructor() {
@@ -18,7 +19,7 @@ export default class World {
     this.dynamicProps = []
     this.bushes = []
 
-    this.buildFloor()
+    this.buildTerrain()
     const hubData = buildHubProps(this.group, this.game.physics)
     if (hubData) {
       this.dynamicProps = hubData.dynamicProps || []
@@ -35,15 +36,62 @@ export default class World {
     this.game.ticker.events.on('tick', (_delta, elapsed) => this.update(elapsed), 5)
   }
 
-  buildFloor() {
-    const size = WORLD_LAYOUT.floorSize
-    const floorGeo = new THREE.PlaneGeometry(size, size, 1, 1)
-    const floorMat = toonFlat('grass')
-    const floor = new THREE.Mesh(floorGeo, floorMat)
-    floor.rotation.x = -Math.PI / 2
-    floor.position.y = 0
-    floor.receiveShadow = true
-    this.group.add(floor)
+  buildTerrain() {
+    const size = TERRAIN.size
+    const res = TERRAIN.res
+    const geo = new THREE.PlaneGeometry(size, size, res, res)
+    geo.rotateX(-Math.PI / 2)
+
+    const positions = geo.attributes.position.array
+    for (let i = 0; i < positions.length; i += 3) {
+      const x = positions[i]
+      const z = positions[i + 2]
+      positions[i + 1] = terrainHeight(x, z)
+    }
+    geo.attributes.position.needsUpdate = true
+
+    const nonIndexed = geo.toNonIndexed()
+    nonIndexed.computeVertexNormals()
+
+    const normals = nonIndexed.attributes.normal.array
+    const verts = nonIndexed.attributes.position.array
+    const vertCount = verts.length / 3
+    const colors = new Float32Array(vertCount * 3)
+
+    const grassCol = new THREE.Color(PALETTE.grass)
+    const grassDarkCol = new THREE.Color(PALETTE.grassDark)
+    const sandCol = new THREE.Color(PALETTE.sand)
+    const oceanDeepCol = new THREE.Color(PALETTE.oceanDeep)
+    const cosThreshold = Math.cos((22 * Math.PI) / 180)
+
+    for (let i = 0; i < vertCount; i++) {
+      const h = verts[i * 3 + 1]
+      const ny = normals[i * 3 + 1]
+      let col
+
+      if (h <= -1.2) {
+        col = oceanDeepCol
+      } else if (h > -0.15) {
+        col = ny > cosThreshold ? grassCol : grassDarkCol
+      } else {
+        col = sandCol
+      }
+
+      colors[i * 3] = col.r
+      colors[i * 3 + 1] = col.g
+      colors[i * 3 + 2] = col.b
+    }
+
+    nonIndexed.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+
+    const mat = new THREE.MeshToonMaterial({
+      vertexColors: true,
+      side: THREE.DoubleSide
+    })
+
+    const mesh = new THREE.Mesh(nonIndexed, mat)
+    mesh.receiveShadow = true
+    this.group.add(mesh)
   }
 
   enterRoom(roomId) {

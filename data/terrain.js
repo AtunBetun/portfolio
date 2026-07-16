@@ -1,0 +1,79 @@
+export const TERRAIN = {
+  size: 50,
+  res: 64,
+  heightScale: 1,
+  plateauR: 10,
+  hillsIn: 10,
+  hillsInFull: 12.5,
+  hillsOutStart: 14.5,
+  hillsOut: 16.5,
+  beachStart: 16.5,
+  beachEnd: 21.5,
+  beachDrop: 0.9,
+  rimStart: 22.5,
+  rimEnd: 25,
+  seaFloorY: -12,
+  waterY: -0.45,
+  head: { x: -12.5, z: -12.5, R: 7, H: 3.0 }
+}
+
+const S = (a, b, x) => {
+  const t = Math.min(Math.max((x - a) / (b - a), 0), 1)
+  return t * t * (3 - 2 * t)
+}
+
+export function terrainHeight(x, z) {
+  const r = Math.hypot(x, z)
+  const T = TERRAIN
+
+  const beach = -T.beachDrop * S(T.beachStart, T.beachEnd, r)
+
+  const rim = (T.seaFloorY + T.beachDrop) * S(T.rimStart, T.rimEnd, r)
+
+  const d = Math.hypot(x - T.head.x, z - T.head.z)
+  const band = S(T.hillsIn, T.hillsInFull, r) * (1 - S(T.hillsOutStart, T.hillsOut, r))
+  const corridor = S(2.5, 5, Math.abs(z))
+  const headGate = S(7, 9.5, d)
+  const hills =
+    band *
+    corridor *
+    headGate *
+    (0.3 * Math.sin(0.35 * x + 1.7) * Math.cos(0.31 * z - 0.6) +
+      0.16 * Math.sin(0.71 * x - 2.1) * Math.cos(0.67 * z + 1.3) +
+      0.07 * Math.sin(1.31 * x + 0.5) * Math.cos(1.23 * z))
+
+  const bump = d < T.head.R ? T.head.H * (0.5 + 0.5 * Math.cos((Math.PI * d) / T.head.R)) : 0
+
+  return beach + rim + hills + bump
+}
+
+export function buildHeightGrid() {
+  const { size, res } = TERRAIN
+  const heights = new Float32Array((res + 1) * (res + 1))
+  for (let col = 0; col <= res; col++) {
+    for (let row = 0; row <= res; row++) {
+      const x = (col / res - 0.5) * size
+      const z = (row / res - 0.5) * size
+      heights[col * (res + 1) + row] = terrainHeight(x, z)
+    }
+  }
+  return heights
+}
+
+export function sampleHeight(heights, x, z) {
+  const { size, res } = TERRAIN
+  const fx = (x / size + 0.5) * res
+  const fz = (z / size + 0.5) * res
+  const cx = Math.min(Math.max(Math.floor(fx), 0), res - 1)
+  const cz = Math.min(Math.max(Math.floor(fz), 0), res - 1)
+  const u = fx - cx
+  const v = fz - cz
+  const H = (col, row) => heights[col * (res + 1) + row]
+  const h00 = H(cx, cz)
+  const h10 = H(cx + 1, cz)
+  const h01 = H(cx, cz + 1)
+  const h11 = H(cx + 1, cz + 1)
+  return u + v <= 1
+    ? h00 + (h10 - h00) * u + (h01 - h00) * v
+    : h11 + (h01 - h11) * (1 - u) + (h10 - h11) * (1 - v)
+}

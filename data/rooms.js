@@ -2,6 +2,7 @@ export const WORLD_LAYOUT = {
   floorSize: 50,
   playerSpawn: { x: 0, y: 2, z: 5 },
   killPlaneY: -10,
+  waterY: -0.45,
   zones: [
     {
       id: 'hub',

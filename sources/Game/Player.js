@@ -324,7 +324,9 @@ export default class Player {
   getBushSpeedMultiplier() {
     if (!this.game.world) return 1
     const px = this.mesh.position.x
+    const py = this.mesh.position.y
     const pz = this.mesh.position.z
+    if (py < -0.15) return 0.55
     for (const b of this.game.world.bushes) {
       if ((px - b.x) ** 2 + (pz - b.z) ** 2 < (b.r + 0.3) ** 2) {
         return 0.55

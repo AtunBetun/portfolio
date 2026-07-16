@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import Game from '../Game.js'
 import { PALETTE } from '../Rendering/Palette.js'
+import { TERRAIN } from '../../../data/terrain.js'
 
 export default class Water {
   constructor(group) {
@@ -24,7 +25,7 @@ export default class Water {
     })
 
     const mesh = new THREE.Mesh(geo, mat)
-    mesh.position.y = -0.4
+    mesh.position.y = TERRAIN.waterY
     mesh.receiveShadow = true
     return mesh
   }
