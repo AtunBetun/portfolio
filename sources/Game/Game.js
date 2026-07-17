@@ -44,8 +44,8 @@ export default class Game {
     this.loadState = 'loading'
     this.canvas = document.querySelector('.js-canvas')
     this.scene = new THREE.Scene()
-    this.scene.background = new THREE.Color(0x6ec6ff)
-    this.scene.fog = new THREE.Fog(0x6ec6ff, 30, 80)
+    this.scene.background = new THREE.Color(0xffe8c8)
+    this.scene.fog = new THREE.FogExp2(0xffe8c8, 0.008)
 
     this.player = null
     this.world = null

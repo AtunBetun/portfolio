@@ -22,12 +22,12 @@ export default class Rendering {
     this.renderer.shadowMap.enabled = true
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
-    this.renderer.toneMappingExposure = 1.2
+    this.renderer.toneMappingExposure = 1.05
 
     this.outlineEffect = new OutlineEffect(this.renderer, {
       defaultThickness: 0.003,
-      defaultColor: [0, 0, 0],
-      defaultAlpha: 1.0
+      defaultColor: [0.1, 0.12, 0.19],
+      defaultAlpha: 0.9
     })
 
     this.game.ticker.events.on(

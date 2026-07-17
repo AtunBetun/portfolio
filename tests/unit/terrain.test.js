@@ -2,25 +2,31 @@ import { describe, it, expect } from 'bun:test'
 import { TERRAIN, terrainHeight, buildHeightGrid, sampleHeight } from '../../data/terrain.js'
 
 describe('terrain height function', () => {
-  it('plateau center is exactly 0', () => {
-    expect(terrainHeight(0, 0)).toBe(0)
+  it('canal bed at center sits at bedY, below water', () => {
+    expect(terrainHeight(0, 0)).toBeCloseTo(TERRAIN.canal.bedY, 5)
+    expect(terrainHeight(0, 10)).toBeCloseTo(TERRAIN.canal.bedY, 5)
+    expect(TERRAIN.canal.bedY).toBeLessThan(TERRAIN.waterY)
   })
 
-  it('entire plateau (r < 10) is flat at y=0', () => {
+  it('plateau outside the canal (r < 10) is flat at y=0', () => {
+    const bankEdge = TERRAIN.canal.halfWidth + TERRAIN.canal.edgeSmooth
     const points = [
-      [0, 0],
       [5, 0],
-      [0, 5],
       [-5, -5],
       [7, 7],
       [-9, 0],
-      [0, -9]
+      [5, -5]
     ]
     for (const [x, z] of points) {
-      if (Math.hypot(x, z) < TERRAIN.plateauR) {
+      if (Math.hypot(x, z) < TERRAIN.plateauR && Math.abs(x) >= bankEdge) {
         expect(terrainHeight(x, z)).toBeCloseTo(0, 5)
       }
     }
+  })
+
+  it('canal ends before the sea rim on both sides', () => {
+    expect(terrainHeight(0, 24)).toBeLessThan(TERRAIN.canal.bedY)
+    expect(terrainHeight(0, -24)).toBeLessThan(TERRAIN.canal.bedY)
   })
 
   it('rim saturation reaches sea floor', () => {
