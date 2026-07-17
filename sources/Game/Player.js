@@ -2,18 +2,51 @@ import * as THREE from 'three'
 import Game from './Game.js'
 import { toon } from './Rendering/ToonMaterials.js'
 import { PALETTE } from './Rendering/Palette.js'
+import { WORLD_LAYOUT } from '../../data/rooms.js'
+import Events from './Events.js'
+
+export const TUNING = {
+  speed: 8,
+  accel: 55,
+  decel: 80,
+  airControl: 0.3,
+  jumpSpeed: 8.2,
+  jumpCutMultiplier: 0.45,
+  gravityUp: 22,
+  gravityDown: 38,
+  apexHangMult: 0.55,
+  apexThreshold: 1.5,
+  terminalVelocity: -25,
+  groundStick: -1.5,
+  coyoteTime: 0.12,
+  jumpBuffer: 0.12,
+  turnSpeed: 12
+}
 
 export default class Player {
   constructor() {
     this.game = Game.getInstance()
-    this.speed = 8
-    this.jumpImpulse = 7
-    this.airControl = 0.3
+    this.events = new Events()
     this.velocity = new THREE.Vector3()
+    this.horizVel = new THREE.Vector2(0, 0)
     this.direction = new THREE.Vector3(0, 0, -1)
     this.verticalVelocity = 0
     this.grounded = false
+    this.wasGrounded = false
     this.elapsed = 0
+
+    this.coyoteTimer = 0
+    this.bufferTimer = 0
+    this.jumpHeld = false
+    this.jumpPressedLastFrame = false
+    this.state = 'idle'
+    this.squash = 0
+    this.edgeLeanAmount = 0
+
+    this._raw = new THREE.Vector3()
+    this._camForward = new THREE.Vector3()
+    this._camRight = new THREE.Vector3()
+    this._input = new THREE.Vector3()
 
     this.mesh = this.createMesh()
     this.game.scene.add(this.mesh)
@@ -59,7 +92,8 @@ export default class Player {
     this.rightLeg.position.set(0.1, 0.15, 0)
     group.add(this.rightLeg)
 
-    group.position.set(0, 2, 0)
+    const spawn = WORLD_LAYOUT.playerSpawn
+    group.position.set(spawn.x, spawn.y, spawn.z)
     return group
   }
 
@@ -72,10 +106,18 @@ export default class Player {
 
   setupPhysics() {
     const RAPIER = this.game.physics.RAPIER
-    const bodyDesc = RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(0, 2, 0)
+    const spawn = WORLD_LAYOUT.playerSpawn
+    const bodyDesc = RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(
+      spawn.x,
+      spawn.y,
+      spawn.z
+    )
     this.body = this.game.physics.createRigidBody(bodyDesc)
 
-    const colliderDesc = RAPIER.ColliderDesc.capsule(0.25, 0.2).setFriction(0).setRestitution(0)
+    const colliderDesc = RAPIER.ColliderDesc.capsule(0.35, 0.25)
+      .setTranslation(0, 0.6, 0)
+      .setFriction(0)
+      .setRestitution(0)
     this.collider = this.game.physics.createCollider(colliderDesc, this.body)
   }
 
@@ -84,7 +126,7 @@ export default class Player {
     const touch = this.game.touch
     this.elapsed += delta
 
-    const raw = new THREE.Vector3()
+    const raw = this._raw.set(0, 0, 0)
     if (touch && touch.active && (touch.direction.x !== 0 || touch.direction.z !== 0)) {
       raw.x = touch.direction.x
       raw.z = touch.direction.z
@@ -97,69 +139,213 @@ export default class Player {
 
     if (raw.lengthSq() > 0) raw.normalize()
 
-    const camForward = new THREE.Vector3()
+    const camForward = this._camForward
     this.game.camera.instance.getWorldDirection(camForward)
     camForward.y = 0
     camForward.normalize()
 
-    const camRight = new THREE.Vector3()
-    camRight.crossVectors(camForward, new THREE.Vector3(0, 1, 0)).normalize()
+    const camRight = this._camRight
+    camRight.crossVectors(camForward, { x: 0, y: 1, z: 0 }).normalize()
 
-    const input = new THREE.Vector3()
+    const input = this._input.set(0, 0, 0)
     input.addScaledVector(camRight, raw.x)
     input.addScaledVector(camForward, -raw.z)
 
+    const inputActive = input.lengthSq() > 0.001
+    const jumpPressed = kb.jump || (touch && touch.jumpPressed)
+    const jumpJustPressed = jumpPressed && !this.jumpPressedLastFrame
+    const jumpReleasedThisFrame = !jumpPressed && this.jumpPressedLastFrame
+    this.jumpPressedLastFrame = jumpPressed
+
     if (this.body) {
-      const controller = this.game.physics.characterController
-      const control = this.grounded ? 1 : this.airControl
-      const moveX = input.x * this.speed * control * delta
-      const moveZ = input.z * this.speed * control * delta
-
-      this.verticalVelocity -= 15 * delta
-      const jumpPressed = kb.jump || (touch && touch.jumpPressed)
-      if (this.grounded && jumpPressed) {
-        this.verticalVelocity = this.jumpImpulse
-      }
-      const moveY = this.verticalVelocity * delta
-
-      const movement = { x: moveX, y: moveY, z: moveZ }
-      controller.computeColliderMovement(this.collider, movement)
-      const computed = controller.computedMovement()
-
-      const pos = this.body.translation()
-      const newPos = {
-        x: pos.x + computed.x,
-        y: pos.y + computed.y,
-        z: pos.z + computed.z
-      }
-      this.body.setNextKinematicTranslation(newPos)
-
-      this.grounded = controller.computedGrounded()
-      if (this.grounded && this.verticalVelocity < 0) {
-        this.verticalVelocity = 0
-      }
-
-      this.mesh.position.set(newPos.x, newPos.y, newPos.z)
+      this.updatePhysics(delta, input, inputActive, jumpJustPressed, jumpReleasedThisFrame)
     } else {
-      if (input.lengthSq() > 0) {
-        this.mesh.position.x += input.x * this.speed * delta
-        this.mesh.position.z += input.z * this.speed * delta
+      if (inputActive) {
+        this.mesh.position.x += input.x * TUNING.speed * delta
+        this.mesh.position.z += input.z * TUNING.speed * delta
       }
     }
 
-    if (input.lengthSq() > 0) {
+    if (inputActive) {
       this.direction.copy(input).normalize()
     }
 
     if (this.direction.lengthSq() > 0) {
-      const angle = Math.atan2(this.direction.x, this.direction.z)
-      this.mesh.rotation.y = angle
+      const targetAngle = Math.atan2(this.direction.x, this.direction.z)
+      this.mesh.rotation.y = dampAngle(
+        this.mesh.rotation.y,
+        targetAngle,
+        1 - Math.exp(-TUNING.turnSpeed * delta)
+      )
     }
 
-    this.animateLegs(input.lengthSq() > 0, delta)
+    this.updateSquash(delta)
+    this.updateEdgeLean(delta, inputActive)
+    this.animateLegs(inputActive, delta)
 
     this.trail.position.set(this.mesh.position.x, 0.1, this.mesh.position.z)
-    this.game.camera.follow(this.mesh.position, input.lengthSq() > 0 ? this.direction : null)
+    this.game.camera.follow(
+      this.mesh.position,
+      inputActive ? this.direction : null,
+      this.verticalVelocity
+    )
+
+    this.updateState(inputActive)
+
+    if (window.__game) {
+      window.__game.debug = window.__game.debug || {}
+      window.__game.debug.playerState = this.state
+    }
+  }
+
+  updatePhysics(delta, input, inputActive, jumpJustPressed, jumpReleasedThisFrame) {
+    const controller = this.game.physics.characterController
+    const T = TUNING
+
+    const bushMul = this.getBushSpeedMultiplier()
+
+    const targetX = inputActive ? input.x * T.speed * bushMul : 0
+    const targetZ = inputActive ? input.z * T.speed * bushMul : 0
+
+    let rate
+    if (!this.grounded && !inputActive) {
+      rate = 0
+    } else {
+      rate = (inputActive ? T.accel : T.decel) * (this.grounded ? 1 : T.airControl)
+    }
+
+    this.horizVel.x = moveToward(this.horizVel.x, targetX, rate * delta)
+    this.horizVel.y = moveToward(this.horizVel.y, targetZ, rate * delta)
+
+    const jump = stepJumpWindows({
+      grounded: this.grounded,
+      jumpJustPressed,
+      coyoteTimer: this.coyoteTimer,
+      bufferTimer: this.bufferTimer,
+      delta
+    })
+    this.coyoteTimer = jump.coyoteTimer
+    this.bufferTimer = jump.bufferTimer
+
+    if (jump.shouldJump) {
+      this.verticalVelocity = T.jumpSpeed
+      this.events.trigger('player:jump')
+    }
+
+    if (jumpReleasedThisFrame && this.verticalVelocity > 0) {
+      this.verticalVelocity *= T.jumpCutMultiplier
+    }
+
+    let g
+    if (this.verticalVelocity > 0) {
+      g = T.gravityUp
+    } else {
+      g = T.gravityDown
+    }
+    if (Math.abs(this.verticalVelocity) < T.apexThreshold && !this.grounded) {
+      g = T.gravityUp * T.apexHangMult
+    }
+
+    this.verticalVelocity = Math.max(this.verticalVelocity - g * delta, T.terminalVelocity)
+
+    const moveX = this.horizVel.x * delta
+    const moveZ = this.horizVel.y * delta
+    const moveY = this.verticalVelocity * delta
+
+    const movement = { x: moveX, y: moveY, z: moveZ }
+    controller.computeColliderMovement(this.collider, movement)
+    const computed = controller.computedMovement()
+
+    const pos = this.body.translation()
+    const newPos = {
+      x: pos.x + computed.x,
+      y: pos.y + computed.y,
+      z: pos.z + computed.z
+    }
+    this.body.setNextKinematicTranslation(newPos)
+
+    this.wasGrounded = this.grounded
+    this.grounded = controller.computedGrounded()
+
+    if (!this.grounded && this.verticalVelocity <= 0 && this.game.physics) {
+      const feet = { x: newPos.x, y: newPos.y + 0.05, z: newPos.z }
+      const down = { x: 0, y: -1, z: 0 }
+      const hit = this.game.physics.castRay(feet, down, 0.15, this.collider)
+      if (hit) this.grounded = true
+    }
+
+    if (this.grounded && this.verticalVelocity <= 0) {
+      this.verticalVelocity = T.groundStick
+    }
+
+    if (!this.wasGrounded && this.grounded) {
+      const impactSpeed = Math.abs(this.lastVerticalVelocity || 0)
+      if (impactSpeed > 6) {
+        this.squash = Math.min(impactSpeed / 20, 0.35)
+        this.events.trigger('player:land', {
+          speed: impactSpeed,
+          position: { x: newPos.x, y: newPos.y, z: newPos.z }
+        })
+      }
+    }
+
+    this.lastVerticalVelocity = this.verticalVelocity
+    this.mesh.position.set(newPos.x, newPos.y, newPos.z)
+
+    if (newPos.y < WORLD_LAYOUT.killPlaneY) {
+      const spawn = WORLD_LAYOUT.playerSpawn
+      this.teleport(spawn.x, spawn.y, spawn.z)
+    }
+  }
+
+  updateSquash(delta) {
+    if (this.squash > 0.001) {
+      this.squash *= Math.exp(-12 * delta)
+      if (this.squash < 0.001) this.squash = 0
+    }
+    this.mesh.scale.set(1 + this.squash * 0.6, 1 - this.squash, 1 + this.squash * 0.6)
+  }
+
+  updateEdgeLean(delta, inputActive) {
+    if (!this.grounded || inputActive || !this.game.physics) {
+      this.edgeLeanAmount *= Math.exp(-8 * delta)
+      this.mesh.rotation.x = this.edgeLeanAmount
+      return
+    }
+
+    const facingX = Math.sin(this.mesh.rotation.y)
+    const facingZ = Math.cos(this.mesh.rotation.y)
+    const probeX = this.mesh.position.x + facingX * 0.35
+    const probeZ = this.mesh.position.z + facingZ * 0.35
+    const origin = { x: probeX, y: this.mesh.position.y + 0.1, z: probeZ }
+    const down = { x: 0, y: -1, z: 0 }
+    const hit = this.game.physics.castRay(origin, down, 0.5, this.collider)
+
+    const targetLean = hit ? 0 : 0.08
+    const wobble = hit ? 0 : Math.sin(this.elapsed * 2 * Math.PI) * 0.02
+    this.edgeLeanAmount += (targetLean + wobble - this.edgeLeanAmount) * (1 - Math.exp(-6 * delta))
+    this.mesh.rotation.x = this.edgeLeanAmount
+  }
+
+  getBushSpeedMultiplier() {
+    if (!this.game.world) return 1
+    return computeBushMultiplier(
+      this.mesh.position.x,
+      this.mesh.position.y,
+      this.mesh.position.z,
+      this.game.world.bushes
+    )
+  }
+
+  updateState(inputActive) {
+    const horizSpeed = Math.sqrt(this.horizVel.x ** 2 + this.horizVel.y ** 2)
+    this.state = computePlayerState({
+      wasGrounded: this.wasGrounded,
+      grounded: this.grounded,
+      inputActive,
+      horizSpeed,
+      verticalVelocity: this.verticalVelocity
+    })
   }
 
   animateLegs(moving) {
@@ -176,8 +362,58 @@ export default class Player {
   teleport(x, y, z) {
     this.mesh.position.set(x, y, z)
     if (this.body) {
-      this.body.setNextKinematicTranslation({ x, y, z })
+      this.body.setTranslation({ x, y, z }, true)
     }
     this.verticalVelocity = 0
+    this.horizVel.set(0, 0)
+    this.coyoteTimer = 0
+    this.bufferTimer = 0
+    this.squash = 0
   }
+}
+
+export function moveToward(current, target, maxDelta) {
+  if (Math.abs(target - current) <= maxDelta) return target
+  return current + Math.sign(target - current) * maxDelta
+}
+
+export function dampAngle(current, target, t) {
+  let diff = target - current
+  while (diff > Math.PI) diff -= Math.PI * 2
+  while (diff < -Math.PI) diff += Math.PI * 2
+  return current + diff * t
+}
+
+export function stepJumpWindows({ grounded, jumpJustPressed, coyoteTimer, bufferTimer, delta }) {
+  const T = TUNING
+  coyoteTimer = grounded ? T.coyoteTime : coyoteTimer - delta
+  bufferTimer = jumpJustPressed ? T.jumpBuffer : bufferTimer - delta
+
+  let shouldJump = false
+  if (bufferTimer > 0 && coyoteTimer > 0) {
+    shouldJump = true
+    bufferTimer = 0
+    coyoteTimer = 0
+  }
+
+  return { coyoteTimer, bufferTimer, shouldJump }
+}
+
+export function computeBushMultiplier(px, py, pz, bushes) {
+  if (py < -0.15) return 0.55
+  for (const b of bushes) {
+    if ((px - b.x) ** 2 + (pz - b.z) ** 2 < (b.r + 0.3) ** 2) {
+      return 0.55
+    }
+  }
+  return 1
+}
+
+export function computePlayerState({ wasGrounded, grounded, inputActive, horizSpeed, verticalVelocity }) {
+  const T = TUNING
+  if (!wasGrounded && grounded) return 'land'
+  if (grounded) return inputActive && horizSpeed > 0.1 ? 'run' : 'idle'
+  if (verticalVelocity > T.apexThreshold) return 'jump'
+  if (Math.abs(verticalVelocity) <= T.apexThreshold) return 'apex'
+  return 'fall'
 }

@@ -4,6 +4,7 @@ import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js'
 import Game from '../Game.js'
 import { toon } from '../Rendering/ToonMaterials.js'
 import { PALETTE } from '../Rendering/Palette.js'
+import { WORLD_LAYOUT } from '../../../data/rooms.js'
 
 export default class PhysicsLetters {
   constructor(group) {
@@ -115,6 +116,7 @@ export default class PhysicsLetters {
     colliderDesc.setMass(2.0).setRestitution(0.2).setFriction(0.6)
     physics.createCollider(colliderDesc, body)
 
+    mesh.userData.spawn = { x, y, z: 0 }
     this.bodies.push({ body, mesh })
   }
 
@@ -124,6 +126,11 @@ export default class PhysicsLetters {
       const rot = body.rotation()
       mesh.position.set(pos.x, pos.y, pos.z)
       mesh.quaternion.set(rot.x, rot.y, rot.z, rot.w)
+      if (pos.y < WORLD_LAYOUT.killPlaneY) {
+        body.setTranslation(mesh.userData.spawn, true)
+        body.setLinvel({ x: 0, y: 0, z: 0 }, true)
+        body.setAngvel({ x: 0, y: 0, z: 0 }, true)
+      }
     }
   }
 }

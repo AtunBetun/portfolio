@@ -17,6 +17,19 @@ import { createToonLights } from './Rendering/ToonLights.js'
 import { createSkyDome } from './Rendering/SkyDome.js'
 import Clouds from './Rendering/Clouds.js'
 
+import * as bg from '@dimforge/rapier3d/rapier_wasm3d_bg.js'
+import wasmUrl from '@dimforge/rapier3d/rapier_wasm3d_bg.wasm?url'
+
+async function loadRapier() {
+  const wasmModule = await WebAssembly.compileStreaming(fetch(wasmUrl))
+  const instance = await WebAssembly.instantiate(wasmModule, {
+    './rapier_wasm3d_bg.js': bg
+  })
+  bg.__wbg_set_wasm(instance.exports)
+  const RAPIER = await import('@dimforge/rapier3d')
+  return RAPIER
+}
+
 export default class Game {
   static instance = null
 
@@ -50,8 +63,7 @@ export default class Game {
     this.setupLighting()
 
     try {
-      const RAPIER = await import('@dimforge/rapier3d')
-      await RAPIER.init()
+      const RAPIER = await loadRapier()
       this.physics = new Physics(RAPIER)
     } catch (err) {
       console.warn('Rapier WASM failed to load, running without physics:', err.message)

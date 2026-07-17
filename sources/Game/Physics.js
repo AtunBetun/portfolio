@@ -1,18 +1,26 @@
 import Game from './Game.js'
+import { TERRAIN, buildHeightGrid } from '../../data/terrain.js'
+
+export const GRAVITY = 22
 
 export default class Physics {
   constructor(RAPIER) {
     this.game = Game.getInstance()
     this.RAPIER = RAPIER
-    this.world = new RAPIER.World({ x: 0, y: -15, z: 0 })
+    this.world = new RAPIER.World({ x: 0, y: -GRAVITY, z: 0 })
     this.world.timestep = 1 / 60
 
-    this.characterController = this.world.createCharacterController(0.02)
-    this.characterController.enableAutostep(0.3, 0.15, true)
-    this.characterController.enableSnapToGround(0.3)
+    this.characterController = this.world.createCharacterController(0.03)
+    this.characterController.setMaxSlopeClimbAngle((50 * Math.PI) / 180)
+    this.characterController.setMinSlopeSlideAngle((55 * Math.PI) / 180)
+    this.characterController.enableAutostep(0.3, 0.12, false)
+    this.characterController.enableSnapToGround(0.4)
     this.characterController.setApplyImpulsesToDynamicBodies(true)
+    this.characterController.setCharacterMass(3.0)
+    this.characterController.setSlideEnabled(true)
 
-    this.buildGround()
+    this.heightGrid = null
+    this.buildTerrain()
     this.game.ticker.events.on('tick', () => this.update(), 3)
   }
 
@@ -20,10 +28,24 @@ export default class Physics {
     this.world.step()
   }
 
-  buildGround() {
-    const bodyDesc = this.RAPIER.RigidBodyDesc.fixed().setTranslation(0, -0.05, 0)
+  buildTerrain() {
+    this.heightGrid = buildHeightGrid()
+    const bodyDesc = this.RAPIER.RigidBodyDesc.fixed().setTranslation(0, 0, 0)
     const body = this.world.createRigidBody(bodyDesc)
-    const colliderDesc = this.RAPIER.ColliderDesc.cuboid(30, 0.05, 30).setFriction(0.8)
+
+    const nrows = TERRAIN.res
+    const ncols = TERRAIN.res
+    const scale = { x: TERRAIN.size, y: 1, z: TERRAIN.size }
+
+    const colliderDesc = this.RAPIER.ColliderDesc.heightfield(
+      nrows,
+      ncols,
+      this.heightGrid,
+      scale,
+      this.RAPIER.HeightFieldFlags.FIX_INTERNAL_EDGES
+    )
+
+    colliderDesc.setFriction(0.8).setRestitution(0)
     this.world.createCollider(colliderDesc, body)
   }
 
@@ -55,16 +77,9 @@ export default class Physics {
     return this.world.createRigidBody(desc)
   }
 
-  createWall(x, z, width, depth) {
-    const bodyDesc = this.RAPIER.RigidBodyDesc.fixed().setTranslation(x, 1.5, z)
-    const body = this.world.createRigidBody(bodyDesc)
-    const colliderDesc = this.RAPIER.ColliderDesc.cuboid(width / 2, 3, depth / 2)
-    this.world.createCollider(colliderDesc, body)
-    return body
-  }
-
-  castRay(origin, direction, maxToi) {
+  castRay(origin, direction, maxToi, excludeCollider) {
     const ray = new this.RAPIER.Ray(origin, direction)
-    return this.world.castRay(ray, maxToi, true)
+    const hit = this.world.castRay(ray, maxToi, true, undefined, undefined, excludeCollider)
+    return hit
   }
 }

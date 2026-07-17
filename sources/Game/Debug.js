@@ -15,6 +15,7 @@ export default class Debug {
 
   expose() {
     window.__game = {
+      debug: {},
       get loadState() {
         return Game.getInstance().loadState
       },

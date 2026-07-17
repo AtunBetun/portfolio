@@ -2,10 +2,12 @@ import * as THREE from 'three'
 import Game from '../Game.js'
 import PhysicsLetters from './PhysicsLetters.js'
 import Water from './Water.js'
+import DustPuff from './DustPuff.js'
 import BlobShadow from './BlobShadow.js'
 import { WORLD_LAYOUT } from '../../../data/rooms.js'
 import { buildHubProps } from './Rooms/HubRoom.js'
-import { toonFlat } from '../Rendering/ToonMaterials.js'
+import { TERRAIN, terrainHeight } from '../../../data/terrain.js'
+import { PALETTE } from '../Rendering/Palette.js'
 
 export default class World {
   constructor() {
@@ -15,16 +17,22 @@ export default class World {
     this.activeRoomId = 'hub'
     this.collectiblesCollected = 0
     this.totalCollectibles = 0
+    this.dynamicProps = []
+    this.bushes = []
     this.blobShadows = []
 
-    this.buildFloor()
-    this.buildBoundaryWalls()
-    buildHubProps(this.group, this.game.physics)
+    this.buildTerrain()
+    const hubData = buildHubProps(this.group, this.game.physics)
+    if (hubData) {
+      this.dynamicProps = hubData.dynamicProps || []
+      this.bushes = hubData.bushes || []
+    }
 
     this.physicsLetters = new PhysicsLetters(this.group)
     this.physicsLetters.load()
 
     this.water = new Water(this.group)
+    this.dustPuff = new DustPuff(this.group)
 
     this.setupBlobShadows()
 
@@ -46,30 +54,68 @@ export default class World {
     })
   }
 
-  buildFloor() {
-    const size = WORLD_LAYOUT.floorSize
-    const floorGeo = new THREE.PlaneGeometry(size, size, 1, 1)
-    const floorMat = toonFlat('grass')
-    const floor = new THREE.Mesh(floorGeo, floorMat)
-    floor.rotation.x = -Math.PI / 2
-    floor.position.y = 0
-    floor.receiveShadow = true
-    this.group.add(floor)
-  }
+  buildTerrain() {
+    const size = TERRAIN.size
+    const res = TERRAIN.res
+    const geo = new THREE.PlaneGeometry(size, size, res, res)
+    geo.rotateX(-Math.PI / 2)
 
-  buildBoundaryWalls() {
-    if (!this.game.physics) return
-    const half = WORLD_LAYOUT.floorSize / 2
-    const thickness = 1
-    this.game.physics.createWall(0, -half - thickness / 2, WORLD_LAYOUT.floorSize + 2, thickness)
-    this.game.physics.createWall(0, half + thickness / 2, WORLD_LAYOUT.floorSize + 2, thickness)
-    this.game.physics.createWall(-half - thickness / 2, 0, thickness, WORLD_LAYOUT.floorSize + 2)
-    this.game.physics.createWall(half + thickness / 2, 0, thickness, WORLD_LAYOUT.floorSize + 2)
+    const positions = geo.attributes.position.array
+    for (let i = 0; i < positions.length; i += 3) {
+      const x = positions[i]
+      const z = positions[i + 2]
+      positions[i + 1] = terrainHeight(x, z)
+    }
+    geo.attributes.position.needsUpdate = true
+
+    const nonIndexed = geo.toNonIndexed()
+    nonIndexed.computeVertexNormals()
+
+    const normals = nonIndexed.attributes.normal.array
+    const verts = nonIndexed.attributes.position.array
+    const vertCount = verts.length / 3
+    const colors = new Float32Array(vertCount * 3)
+
+    const grassCol = new THREE.Color(PALETTE.grass)
+    const grassDarkCol = new THREE.Color(PALETTE.grassDark)
+    const sandCol = new THREE.Color(PALETTE.sand)
+    const oceanDeepCol = new THREE.Color(PALETTE.oceanDeep)
+    const cosThreshold = Math.cos((22 * Math.PI) / 180)
+
+    for (let i = 0; i < vertCount; i++) {
+      const h = verts[i * 3 + 1]
+      const ny = normals[i * 3 + 1]
+      let col
+
+      if (h <= -1.2) {
+        col = oceanDeepCol
+      } else if (h > -0.15) {
+        col = ny > cosThreshold ? grassCol : grassDarkCol
+      } else {
+        col = sandCol
+      }
+
+      colors[i * 3] = col.r
+      colors[i * 3 + 1] = col.g
+      colors[i * 3 + 2] = col.b
+    }
+
+    nonIndexed.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+
+    const mat = new THREE.MeshToonMaterial({
+      vertexColors: true,
+      side: THREE.DoubleSide
+    })
+
+    const mesh = new THREE.Mesh(nonIndexed, mat)
+    mesh.receiveShadow = true
+    this.group.add(mesh)
   }
 
   enterRoom(roomId) {
     if (roomId === 'hub') {
-      this.game.player.teleport(0, 2, 5)
+      const spawn = WORLD_LAYOUT.playerSpawn
+      this.game.player.teleport(spawn.x, spawn.y, spawn.z)
       this.activeRoomId = 'hub'
     }
   }
@@ -80,6 +126,18 @@ export default class World {
     for (const c of this.collectibles) {
       c.update(elapsed)
       c.checkPickup(playerPos)
+    }
+
+    for (const { body, mesh } of this.dynamicProps) {
+      const p = body.translation()
+      const q = body.rotation()
+      mesh.position.set(p.x, p.y, p.z)
+      mesh.quaternion.set(q.x, q.y, q.z, q.w)
+      if (p.y < WORLD_LAYOUT.killPlaneY) {
+        body.setTranslation(mesh.userData.spawn, true)
+        body.setLinvel({ x: 0, y: 0, z: 0 }, true)
+        body.setAngvel({ x: 0, y: 0, z: 0 }, true)
+      }
     }
 
     if (this.physicsLetters.loaded) {
