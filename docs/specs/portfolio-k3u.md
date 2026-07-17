@@ -18,42 +18,44 @@ The current hub is a 50x50 flat green plane with generic trees, rocks, and crate
 
 ### Color Palette Additions
 
-| Key | Hex | Category |
-|-----|-----|----------|
-| `cascoYellow` | 0xf2c94c | Facade — warm Panamanian gold |
-| `cascoTerracotta` | 0xd4704a | Facade — clay orange-red |
-| `cascoWhite` | 0xfaf3e8 | Facade — trim, pilasters |
-| `cascoBlue` | 0x5b9bd5 | Facade — ocean-inspired |
-| `cascoCream` | 0xf5e6c8 | Facade — bleached colonial |
-| `cascoMint` | 0x8ecfb0 | Facade — rare accent (2 buildings only) |
-| `cascoIron` | 0x4a4a4a | Props — railings, lampposts |
-| `cascoCobble` | 0x9e8e78 | Ground — street surface |
-| `cascoCobbleDark` | 0x7a6b58 | Ground — mortar/variation |
-| `cascoRoof` | 0xb85c38 | Roof — terracotta tiles |
-| `cascoRoofDark` | 0x8a3f22 | Roof — tile shadow |
-| `bougainvillea` | 0xd4367b | Vegetation — magenta flower |
-| `bougainvilleaLight` | 0xf06292 | Vegetation — light pink variant |
-| `palmTrunk` | 0x8b6914 | Vegetation — royal palm trunk |
-| `palmFrond` | 0x3d8b37 | Vegetation — palm leaf |
-| `ceibaGreen` | 0x2d6b2d | Vegetation — ceiba canopy |
-| `canalTeal` | 0x15a5b5 | Water — canal surface |
-| `canalDeep` | 0x0d7a8a | Water — canal depth |
-| `foamWhite` | 0xeef8ff | Water — foam edges |
-| `rimWarm` | 0xfff0d0 | Lighting — rim highlight |
-| `shadowCool` | 0x5a6e9e | Lighting — shadow tint |
-| `fogWarm` | 0xffe8c8 | Atmosphere — near fog |
-| `fogCool` | 0xc8d8f0 | Atmosphere — far fog |
-| `inkBlue` | 0x1a2030 | Outline — colored ink |
+| Key                  | Hex      | Category                                |
+| -------------------- | -------- | --------------------------------------- |
+| `cascoYellow`        | 0xf2c94c | Facade — warm Panamanian gold           |
+| `cascoTerracotta`    | 0xd4704a | Facade — clay orange-red                |
+| `cascoWhite`         | 0xfaf3e8 | Facade — trim, pilasters                |
+| `cascoBlue`          | 0x5b9bd5 | Facade — ocean-inspired                 |
+| `cascoCream`         | 0xf5e6c8 | Facade — bleached colonial              |
+| `cascoMint`          | 0x8ecfb0 | Facade — rare accent (2 buildings only) |
+| `cascoIron`          | 0x4a4a4a | Props — railings, lampposts             |
+| `cascoCobble`        | 0x9e8e78 | Ground — street surface                 |
+| `cascoCobbleDark`    | 0x7a6b58 | Ground — mortar/variation               |
+| `cascoRoof`          | 0xb85c38 | Roof — terracotta tiles                 |
+| `cascoRoofDark`      | 0x8a3f22 | Roof — tile shadow                      |
+| `bougainvillea`      | 0xd4367b | Vegetation — magenta flower             |
+| `bougainvilleaLight` | 0xf06292 | Vegetation — light pink variant         |
+| `palmTrunk`          | 0x8b6914 | Vegetation — royal palm trunk           |
+| `palmFrond`          | 0x3d8b37 | Vegetation — palm leaf                  |
+| `ceibaGreen`         | 0x2d6b2d | Vegetation — ceiba canopy               |
+| `canalTeal`          | 0x15a5b5 | Water — canal surface                   |
+| `canalDeep`          | 0x0d7a8a | Water — canal depth                     |
+| `foamWhite`          | 0xeef8ff | Water — foam edges                      |
+| `rimWarm`            | 0xfff0d0 | Lighting — rim highlight                |
+| `shadowCool`         | 0x5a6e9e | Lighting — shadow tint                  |
+| `fogWarm`            | 0xffe8c8 | Atmosphere — near fog                   |
+| `fogCool`            | 0xc8d8f0 | Atmosphere — far fog                    |
+| `inkBlue`            | 0x1a2030 | Outline — colored ink                   |
 
 ### Material System
 
 **Toon shading upgrade:** Extend `MeshToonMaterial` via `onBeforeCompile`:
+
 - 4-step gradient ramp `[64, 128, 190, 255]` (shadow, dark-mid, light-mid, lit)
 - Colored shadows via `shadowTint` uniform: shadows drift toward cool blue-purple instead of just darkening
 - Sun-keyed rim light (fresnel, gated by `dot(normal, sunDir) > 0.3`, hard-stepped at 0.5-0.6 threshold)
 - Stepped specular for water, wet cobblestone, and iron only (threshold 0.98 — tiny crisp dot)
 
 **Outline rules:**
+
 - Keep `OutlineEffect` (inverted hull). Color-match outlines: darkened + hue-shifted toward blue (never pure black).
 - Thickness tiers: characters/hero interactables `0.005-0.007`, architecture `0.003`, foliage `0.0015` or disabled
 - `toon()` factory extended to accept `outline: { thickness, color, alpha }` option
@@ -122,14 +124,14 @@ Ground plane is X/Z, Y is up. World spans **x: [-60, +60], z: [-40, +40]** (120x
 
 ### District Specs
 
-| District | Bounds | Ground y | Key Landmarks |
-|----------|--------|----------|---------------|
-| **Plaza Central** | x:0..+24, z:-12..+12 | +2.5 | Fountain at (12,0), spawn at (12,+4) |
-| **Career Row / Malecón** | x:-4..+56, z:+22..+36 | +2 | 3 buildings at (8,26,44 on z=+26), lighthouse at (52,+33) |
-| **The Canal** | x:-21..-9, z:-40..+38 | water=0 | Lock A at z=-32, Lock B at z=+18, 12 wide |
-| **The Bridge** | x:-23..-7, z=-2 | apex +7 | Pylons reach y=+14, full orientation platform |
-| **Casco Viejo** | x:-58..-25, z:-30..+15 | +2 to +4 | Cathedral at (-42,-20), Plazuela at (-42,-8), Mirador at (-54,+12) |
-| **The Dock** | x:-30..-6, z:+22..+36 | +1.5 | Cayuco at (-26,+30), pier to (-24,+37) |
+| District                 | Bounds                 | Ground y | Key Landmarks                                                      |
+| ------------------------ | ---------------------- | -------- | ------------------------------------------------------------------ |
+| **Plaza Central**        | x:0..+24, z:-12..+12   | +2.5     | Fountain at (12,0), spawn at (12,+4)                               |
+| **Career Row / Malecón** | x:-4..+56, z:+22..+36  | +2       | 3 buildings at (8,26,44 on z=+26), lighthouse at (52,+33)          |
+| **The Canal**            | x:-21..-9, z:-40..+38  | water=0  | Lock A at z=-32, Lock B at z=+18, 12 wide                          |
+| **The Bridge**           | x:-23..-7, z=-2        | apex +7  | Pylons reach y=+14, full orientation platform                      |
+| **Casco Viejo**          | x:-58..-25, z:-30..+15 | +2 to +4 | Cathedral at (-42,-20), Plazuela at (-42,-8), Mirador at (-54,+12) |
+| **The Dock**             | x:-30..-6, z:+22..+36  | +1.5     | Cayuco at (-26,+30), pier to (-24,+37)                             |
 
 ### Navigation Loop (~2 min at run speed)
 
@@ -143,28 +145,28 @@ Ground plane is X/Z, Y is up. World spans **x: [-60, +60], z: [-40, +40]** (120x
 
 ### Landmark Hierarchy
 
-| Tier | Landmark | Height | Rule |
-|------|----------|--------|------|
-| 1 | Bridge pylons | 14 | Visible from everywhere — the compass |
-| 1 | Cathedral bell tower | 18+ (on y=+4) | Visible everywhere west — marks WEST |
-| 2 | Lighthouse | 14 | Malecón, plaza, bridge — marks EAST |
-| 2 | Fountain jet | 4 + audio | Plaza + bridge — marks HOME |
-| 3 | Lock gates A/B | 5 | Canal sightline ends — marks N/S |
-| 3 | Cayuco + pier | low | Bridge and mirador — marks RACE |
+| Tier | Landmark             | Height        | Rule                                  |
+| ---- | -------------------- | ------------- | ------------------------------------- |
+| 1    | Bridge pylons        | 14            | Visible from everywhere — the compass |
+| 1    | Cathedral bell tower | 18+ (on y=+4) | Visible everywhere west — marks WEST  |
+| 2    | Lighthouse           | 14            | Malecón, plaza, bridge — marks EAST   |
+| 2    | Fountain jet         | 4 + audio     | Plaza + bridge — marks HOME           |
+| 3    | Lock gates A/B       | 5             | Canal sightline ends — marks N/S      |
+| 3    | Cayuco + pier        | low           | Bridge and mirador — marks RACE       |
 
 Rule: from any walkable point, at least one Tier-1 landmark and the canal or ocean is visible.
 
 ### Elevation Map
 
-| Location | y |
-|----------|---|
-| Ocean + canal south of Lock B | -0.5 to 0 |
-| Dock plaza & pier | +1.2 to +1.5 |
-| Main datum (Malecón, streets, canal banks) | +2 |
-| Plaza Central podium | +2.5 |
-| Casco Viejo upper terraces | +3 to +4 |
-| Mirador | +4.5 |
-| Bridge apex | +7 |
+| Location                                   | y            |
+| ------------------------------------------ | ------------ |
+| Ocean + canal south of Lock B              | -0.5 to 0    |
+| Dock plaza & pier                          | +1.2 to +1.5 |
+| Main datum (Malecón, streets, canal banks) | +2           |
+| Plaza Central podium                       | +2.5         |
+| Casco Viejo upper terraces                 | +3 to +4     |
+| Mirador                                    | +4.5         |
+| Bridge apex                                | +7           |
 
 ---
 
@@ -231,17 +233,17 @@ The crown jewel. A AAA-quality immersive colonial quarter that rewards every tur
 
 3 N-S lanes x 3 E-W lanes creating 9 intersections and 12+ street segments:
 
-| Lane | x | Character |
-|------|---|-----------|
-| Calle Oeste | -52 | Residential, highest elevation, intimate |
-| Calle Central | -42 | Main boulevard, commercial, cathedral street |
-| Calle Este | -32 | Waterfront cafes, lowest elevation, evening energy |
+| Lane          | x   | Character                                          |
+| ------------- | --- | -------------------------------------------------- |
+| Calle Oeste   | -52 | Residential, highest elevation, intimate           |
+| Calle Central | -42 | Main boulevard, commercial, cathedral street       |
+| Calle Este    | -32 | Waterfront cafes, lowest elevation, evening energy |
 
-| Lane | z | Character |
-|------|---|-----------|
-| Calle Sur | -22 | Cathedral formal approach |
-| Calle Media | -8 | Plazuela opening |
-| Calle Norte | +8 | Gateway arch, leads to Mirador |
+| Lane        | z   | Character                      |
+| ----------- | --- | ------------------------------ |
+| Calle Sur   | -22 | Cathedral formal approach      |
+| Calle Media | -8  | Plazuela opening               |
+| Calle Norte | +8  | Gateway arch, leads to Mirador |
 
 Streets are 3-4 units wide. Buildings 2-3 stories (6-9 units tall), shoulder-to-shoulder with balconies overhanging 1 unit.
 
@@ -295,27 +297,29 @@ Rule: NEVER same color adjacent. Pattern: warm-cool-neutral or warm-neutral-cool
 
 ### Vegetation Strategy
 
-| Type | Count | Placement Rule |
-|------|-------|---------------|
+| Type          | Count | Placement Rule                                                                   |
+| ------------- | ----- | -------------------------------------------------------------------------------- |
 | Bougainvillea | 12-15 | Every 3rd building, cascades from 2nd+ floor, 70% magenta / 20% pink / 10% white |
-| Royal palms | 8 | Major intersections and Mirador |
-| Coconut palms | 4 | Calle Este waterfront only, leaning |
-| Ceiba | 1 | Plazuela — THE tree |
-| Orange trees | 4 | Cathedral plaza corners |
-| Ficus | 2 | Calle Central segments |
-| Potted plants | 20+ | Variety: agave, ferns, succulents, birds-of-paradise, pothos |
+| Royal palms   | 8     | Major intersections and Mirador                                                  |
+| Coconut palms | 4     | Calle Este waterfront only, leaning                                              |
+| Ceiba         | 1     | Plazuela — THE tree                                                              |
+| Orange trees  | 4     | Cathedral plaza corners                                                          |
+| Ficus         | 2     | Calle Central segments                                                           |
+| Potted plants | 20+   | Variety: agave, ferns, succulents, birds-of-paradise, pothos                     |
 
 ### Atmospheric Life
 
 **String lights:** 8 strands across the district. Only between buildings <4 units apart. Catenary sag 0.3 units. Warm-white emissive (bloom at >1.0 intensity). Never in wide spaces.
 
 **Animated elements:**
+
 - Laundry (3 instances): white sheets + colored items on catenary lines, vertex-shader sway
 - Cafe steam (2 particle emitters): tiny white rising particles, 0.5 units height
 - Bougainvillea sway: vertex-shader at amplitude 0.05, same technique as grass
 - Water: cathedral plaza fountain (splash particles), wall fountain (trickle)
 
 **Fauna:**
+
 - Cat on windowsill (Building A3, 2nd floor): slow tail-sway, yawns when player approaches
 - Dog sleeping (Calle Oeste south): breathing scale oscillation, rare stretch
 - Birds on cathedral roof (3): occasional wing-flap
@@ -324,6 +328,7 @@ Rule: NEVER same color adjacent. Pattern: warm-cool-neutral or warm-neutral-cool
 - Butterflies (8-10): figure-8 paths near flowers, yellow morpho dominant, 2 rare blue morpho
 
 **Sound zones:**
+
 - Cathedral Plaza: fountain splash, distant bell every 90s
 - Plazuela: birdsong, cafe clatter
 - Calle Oeste: faint salsa radio, gym iron clinking
@@ -332,15 +337,15 @@ Rule: NEVER same color adjacent. Pattern: warm-cool-neutral or warm-neutral-cool
 
 ### Interactable Content Points (7)
 
-| ID | Content | Location | Building | Trigger |
-|----|---------|----------|----------|---------|
-| `powerlifting` | Gym | (-55, -15) | Archetype 4 "Iron Chapel" | Barbell on rack |
-| `coffee` | Cafe | (-35, -25) | Archetype 4, window counter | Coffee cup |
-| `neovim` | Tech Loft | (-39, -14) 2nd floor | Archetype 1 | Monitor glow |
-| `gaming` | Arcade | (-45, +5) | Archetype 4 | Arcade cabinet |
-| `fsu` | Diploma | (-49, +3) 2nd floor | Archetype 1 | Diploma frame |
-| `cayuco` | Race heritage | (-29, +2) | Archetype 3 `cascoBlue` | Cayuco on wall |
-| `panama` | Identity mural | (-35, -18) | Full-wall mural | Canal section |
+| ID             | Content        | Location             | Building                    | Trigger         |
+| -------------- | -------------- | -------------------- | --------------------------- | --------------- |
+| `powerlifting` | Gym            | (-55, -15)           | Archetype 4 "Iron Chapel"   | Barbell on rack |
+| `coffee`       | Cafe           | (-35, -25)           | Archetype 4, window counter | Coffee cup      |
+| `neovim`       | Tech Loft      | (-39, -14) 2nd floor | Archetype 1                 | Monitor glow    |
+| `gaming`       | Arcade         | (-45, +5)            | Archetype 4                 | Arcade cabinet  |
+| `fsu`          | Diploma        | (-49, +3) 2nd floor  | Archetype 1                 | Diploma frame   |
+| `cayuco`       | Race heritage  | (-29, +2)            | Archetype 3 `cascoBlue`     | Cayuco on wall  |
+| `panama`       | Identity mural | (-35, -18)           | Full-wall mural             | Canal section   |
 
 Each interaction feels like discovery, not a menu. Content surfaces naturally from the environment.
 
@@ -372,39 +377,40 @@ Each interaction feels like discovery, not a menu. Content surfaces naturally fr
 
 ### New Files
 
-| File | Purpose |
-|------|---------|
-| `sources/Game/Rendering/ToonShaderPatch.js` | onBeforeCompile injection: shadow tint, rim, specular |
-| `sources/Game/Rendering/PostFX.js` | EffectComposer chain: OutlineRenderPass, bloom, grade, output, SMAA |
-| `sources/Game/Rendering/CanalWater.js` | Custom ShaderMaterial for canal (depth, foam, reflections) |
-| `sources/Game/World/Rooms/PanamaHub.js` | Orchestrator — replaces buildHubProps |
-| `sources/Game/World/Rooms/districts/PlazaCentral.js` | Spawn area geometry + props |
-| `sources/Game/World/Rooms/districts/CareerRow.js` | 3 career buildings + Malecón |
-| `sources/Game/World/Rooms/districts/Canal.js` | Canal geometry, lock gates, towpaths |
-| `sources/Game/World/Rooms/districts/Bridge.js` | Bridge structure + pylons |
-| `sources/Game/World/Rooms/districts/CascoViejo.js` | Hero district orchestrator |
-| `sources/Game/World/Rooms/districts/casco/Streets.js` | Street grid + cobblestone |
-| `sources/Game/World/Rooms/districts/casco/Buildings.js` | 10 archetype factories + placement |
-| `sources/Game/World/Rooms/districts/casco/Cathedral.js` | Full cathedral geometry |
-| `sources/Game/World/Rooms/districts/casco/Plazuela.js` | Gazebo, ceiba, plaza |
-| `sources/Game/World/Rooms/districts/casco/Vegetation.js` | Bougainvillea, palms, pots |
-| `sources/Game/World/Rooms/districts/casco/Atmosphere.js` | String lights, fauna, particles |
-| `sources/Game/World/Rooms/districts/Dock.js` | Pier, cayuco, race hook |
-| `sources/Game/World/Rooms/districts/Waterfront.js` | Boundary treatment, distant islands |
+| File                                                     | Purpose                                                             |
+| -------------------------------------------------------- | ------------------------------------------------------------------- |
+| `sources/Game/Rendering/ToonShaderPatch.js`              | onBeforeCompile injection: shadow tint, rim, specular               |
+| `sources/Game/Rendering/PostFX.js`                       | EffectComposer chain: OutlineRenderPass, bloom, grade, output, SMAA |
+| `sources/Game/Rendering/CanalWater.js`                   | Custom ShaderMaterial for canal (depth, foam, reflections)          |
+| `sources/Game/World/Rooms/PanamaHub.js`                  | Orchestrator — replaces buildHubProps                               |
+| `sources/Game/World/Rooms/districts/PlazaCentral.js`     | Spawn area geometry + props                                         |
+| `sources/Game/World/Rooms/districts/CareerRow.js`        | 3 career buildings + Malecón                                        |
+| `sources/Game/World/Rooms/districts/Canal.js`            | Canal geometry, lock gates, towpaths                                |
+| `sources/Game/World/Rooms/districts/Bridge.js`           | Bridge structure + pylons                                           |
+| `sources/Game/World/Rooms/districts/CascoViejo.js`       | Hero district orchestrator                                          |
+| `sources/Game/World/Rooms/districts/casco/Streets.js`    | Street grid + cobblestone                                           |
+| `sources/Game/World/Rooms/districts/casco/Buildings.js`  | 10 archetype factories + placement                                  |
+| `sources/Game/World/Rooms/districts/casco/Cathedral.js`  | Full cathedral geometry                                             |
+| `sources/Game/World/Rooms/districts/casco/Plazuela.js`   | Gazebo, ceiba, plaza                                                |
+| `sources/Game/World/Rooms/districts/casco/Vegetation.js` | Bougainvillea, palms, pots                                          |
+| `sources/Game/World/Rooms/districts/casco/Atmosphere.js` | String lights, fauna, particles                                     |
+| `sources/Game/World/Rooms/districts/Dock.js`             | Pier, cayuco, race hook                                             |
+| `sources/Game/World/Rooms/districts/Waterfront.js`       | Boundary treatment, distant islands                                 |
 
 ### Performance Budget (60fps on MacBook Pro 2020)
 
-| Slice | Budget |
-|-------|--------|
-| Rapier physics | 1.5ms |
-| JS scene update | 1.0ms |
-| Depth pre-pass (half-res, for water) | 0.8ms |
-| Main render + OutlineEffect | 5.5ms |
-| Bloom (half-res) | 1.0ms |
-| Grade + vignette + Output + SMAA | 1.2ms |
-| Headroom | ~5ms |
+| Slice                                | Budget |
+| ------------------------------------ | ------ |
+| Rapier physics                       | 1.5ms  |
+| JS scene update                      | 1.0ms  |
+| Depth pre-pass (half-res, for water) | 0.8ms  |
+| Main render + OutlineEffect          | 5.5ms  |
+| Bloom (half-res)                     | 1.0ms  |
+| Grade + vignette + Output + SMAA     | 1.2ms  |
+| Headroom                             | ~5ms   |
 
 Hard limits:
+
 - Draw calls: ≤150 (OutlineEffect roughly doubles for outlined meshes → ~280 GPU draws)
 - Triangles: ≤350k visible
 - Texture memory: ≤64MB
@@ -416,6 +422,7 @@ Kill switches (Debug.js): bloom off, SMAA off, DPR 1, hatching off — mobile fa
 ### Water Shader (Canal)
 
 Custom `ShaderMaterial` on subdivided plane (64x64):
+
 - Depth pre-pass for shore foam (thin band where depth < 0.4)
 - 3 stepped color bands: shallow (`canalTeal`) → deep (`canalDeep`)
 - Fresnel sky reflection (stepped at 0.6, 35% mix)
@@ -474,15 +481,19 @@ Custom `ShaderMaterial` on subdivided plane (64x64):
 ## Quality Gates
 
 ### Screenshot Test
+
 Would a single frame from this world look impressive in a portfolio? Would someone share it on Twitter? If any angle looks flat, empty, or "WebGL demo-ish" — it fails.
 
 ### Density Test
+
 Stand at any point. Look in every direction. Is every 5-unit radius visually interesting? At least 3 layers visible (foreground/mid/background)? If you can see bare ground or empty sky filling more than 20% of the frame — it fails.
 
 ### Flow Test
+
 A first-time player naturally discovers all 6 districts within 2 minutes. Never feels lost (landmarks always visible). Never backtracks (loop design with two canal crossings). If any player gets stuck at a dead end or walks in circles — it fails.
 
 ### Performance Test
+
 60fps sustained on MacBook Pro 2020 (Intel Iris Plus). Run 120 frames, assert `drawCalls < 150 && avgFrameMs < 14` in e2e test. If any frame exceeds 16ms — profile and fix.
 
 ---

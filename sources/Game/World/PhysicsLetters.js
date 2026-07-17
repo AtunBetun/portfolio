@@ -30,7 +30,8 @@ export default class PhysicsLetters {
   }
 
   buildLetters(font) {
-    const text = 'ALBERTO DE SAINT MALO'
+    const text = 'ALBERTO'
+    const origin = { x: 9, z: 9 }
     const size = 1.0
     const depth = 0.35
     const spacing = 0.15
@@ -75,11 +76,11 @@ export default class PhysicsLetters {
       mesh.castShadow = true
 
       const dropHeight = 3 + Math.random() * 2
-      mesh.position.set(x, dropHeight, 0)
+      mesh.position.set(origin.x + x, dropHeight, origin.z)
       this.group.add(mesh)
 
       if (this.game.physics) {
-        this.createLetterBody(geo, mesh, x, dropHeight, colorIdx)
+        this.createLetterBody(geo, mesh, origin.x + x, dropHeight, origin.z)
       }
 
       this.letters.push(mesh)
@@ -88,11 +89,11 @@ export default class PhysicsLetters {
     }
   }
 
-  createLetterBody(geo, mesh, x, y) {
+  createLetterBody(geo, mesh, x, y, z) {
     const physics = this.game.physics
     const RAPIER = physics.RAPIER
 
-    const body = physics.createDynamicBody(x, y, 0, {
+    const body = physics.createDynamicBody(x, y, z, {
       linearDamping: 2.5,
       angularDamping: 2.0
     })
@@ -116,7 +117,7 @@ export default class PhysicsLetters {
     colliderDesc.setMass(2.0).setRestitution(0.2).setFriction(0.6)
     physics.createCollider(colliderDesc, body)
 
-    mesh.userData.spawn = { x, y, z: 0 }
+    mesh.userData.spawn = { x, y, z }
     this.bodies.push({ body, mesh })
   }
 

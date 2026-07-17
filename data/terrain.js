@@ -14,7 +14,8 @@ export const TERRAIN = {
   rimEnd: 25,
   seaFloorY: -12,
   waterY: -0.45,
-  head: { x: -12.5, z: -12.5, R: 7, H: 3.0 }
+  head: { x: -12.5, z: -12.5, R: 7, H: 3.0 },
+  canal: { halfWidth: 2.5, edgeSmooth: 1.8, bedY: -1.2, zEnd: 20 }
 }
 
 const S = (a, b, x) => {
@@ -34,17 +35,26 @@ export function terrainHeight(x, z) {
   const band = S(T.hillsIn, T.hillsInFull, r) * (1 - S(T.hillsOutStart, T.hillsOut, r))
   const corridor = S(2.5, 5, Math.abs(z))
   const headGate = S(7, 9.5, d)
+  const bankEdge = T.canal.halfWidth + T.canal.edgeSmooth
+  const canalGate = S(bankEdge, bankEdge + 2, Math.abs(x))
   const hills =
     band *
     corridor *
     headGate *
+    canalGate *
     (0.3 * Math.sin(0.35 * x + 1.7) * Math.cos(0.31 * z - 0.6) +
       0.16 * Math.sin(0.71 * x - 2.1) * Math.cos(0.67 * z + 1.3) +
       0.07 * Math.sin(1.31 * x + 0.5) * Math.cos(1.23 * z))
 
   const bump = d < T.head.R ? T.head.H * (0.5 + 0.5 * Math.cos((Math.PI * d) / T.head.R)) : 0
 
-  return beach + rim + hills + bump
+  const base = beach + rim + hills + bump
+
+  const C = T.canal
+  const across = 1 - S(C.halfWidth, C.halfWidth + C.edgeSmooth, Math.abs(x))
+  const along = 1 - S(C.zEnd, C.zEnd + 2, Math.abs(z))
+  const canalMask = across * along
+  return base + (Math.min(C.bedY, base) - base) * canalMask
 }
 
 export function buildHeightGrid() {
