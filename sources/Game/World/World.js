@@ -7,6 +7,9 @@ import BlobShadow from './BlobShadow.js'
 import { WORLD_LAYOUT } from '../../../data/rooms.js'
 import { buildPanamaHub } from './Rooms/PanamaHub.js'
 import { createCanalWater } from '../Rendering/CanalWater.js'
+import AmbientSway from './AmbientSway.js'
+import ChimneySmoke from './ChimneySmoke.js'
+import Critters from './Critters.js'
 import { TERRAIN, terrainHeight } from '../../../data/terrain.js'
 import { PALETTE } from '../Rendering/Palette.js'
 
@@ -23,7 +26,23 @@ export default class World {
     this.blobShadows = []
 
     this.buildTerrain()
-    buildPanamaHub(this.group, this.game.physics)
+    const hubRefs = buildPanamaHub(this.group, this.game.physics)
+    this.dynamicProps = hubRefs.dynamicProps
+    this.bushes = hubRefs.bushes
+
+    this.ambientSway = new AmbientSway()
+    for (const pf of hubRefs.palmFronds) {
+      this.ambientSway.register(pf.group, { axis: 'z', amp: 0.06, freq: 1.4, phase: pf.phase })
+    }
+    if (hubRefs.flagCloth) {
+      this.ambientSway.register(hubRefs.flagCloth, { axis: 'y', amp: 0.35, freq: 2.6, phase: 0 })
+    }
+
+    this.chimneySmoke = new ChimneySmoke(this.group, hubRefs.chimneyTop)
+    this.critters = new Critters(
+      this.group,
+      this.game.physics ? this.game.physics.heightGrid : null
+    )
 
     this.physicsLetters = new PhysicsLetters(this.group)
     this.physicsLetters.load()
