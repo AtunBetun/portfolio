@@ -81,7 +81,10 @@ export class CayucoRace {
   }
 
   getBoatWorldPos() {
-    return this.boat.position.clone().add(this.group.position)
+    // Track the mesh's world position, not the centerline — the hull is drawn
+    // offset by lateralOffset (wind drift), so tracking boat.position would let
+    // the boat drift out of frame mid-race.
+    return this.boat.getWorldPosition()
   }
 
   get currentAct() {
