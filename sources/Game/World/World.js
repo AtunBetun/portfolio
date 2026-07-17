@@ -37,6 +37,15 @@ export default class World {
     if (hubRefs.flagCloth) {
       this.ambientSway.register(hubRefs.flagCloth, { axis: 'y', amp: 0.35, freq: 2.6, phase: 0 })
     }
+    for (const s of hubRefs.sparkles) {
+      this.ambientSway.register(s.mesh, {
+        prop: 'position',
+        axis: 'y',
+        amp: 0.25,
+        freq: 1.1,
+        phase: s.phase
+      })
+    }
 
     this.chimneySmoke = new ChimneySmoke(this.group, hubRefs.chimneyTop)
     this.critters = new Critters(

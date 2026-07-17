@@ -22,6 +22,7 @@ export function buildPanamaHub(group, physics) {
     dynamicProps: flora.dynamicProps,
     bushes: flora.bushes,
     palmFronds: flora.palmFronds,
+    sparkles: flora.sparkles,
     flagCloth: getFlagCloth(),
     chimneyTop: CHIMNEY_TOP
   }

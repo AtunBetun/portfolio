@@ -62,9 +62,9 @@ export function buildFlora(group, physics, grid) {
   buildBushes(group, bushes, grid)
   buildRocks(group, physics, grid)
   buildCrates(group, physics, dynamicProps, grid)
-  buildSparkles(group, grid)
+  const sparkles = buildSparkles(group, grid)
 
-  return { dynamicProps, bushes, palmFronds }
+  return { dynamicProps, bushes, palmFronds, sparkles }
 }
 
 function groundAt(grid, x, z) {
@@ -123,6 +123,7 @@ function buildPalms(group, physics, grid, palmFronds) {
     const y = groundAt(grid, x, z)
     const { palm, frondGroup } = createPalm()
     palm.position.set(x, y, z)
+    palm.rotation.y = hashFloat(x * 5, z * 3) * Math.PI * 2
     group.add(palm)
 
     palmFronds.push({ group: frondGroup, phase: hashFloat(x * 11, z * 17) * Math.PI * 2 })
@@ -262,6 +263,7 @@ function buildCrates(group, physics, dynamicProps, grid) {
 function buildSparkles(group, grid) {
   const colors = [PALETTE.bougainvillea, PALETTE.cascoYellow, PALETTE.canalTeal]
   const particleGeo = new THREE.SphereGeometry(0.04, 4, 3)
+  const sparkles = []
 
   for (let i = 0; i < 24; i++) {
     const x = (hashFloat(i * 7, i * 13) - 0.5) * 28
@@ -272,8 +274,9 @@ function buildSparkles(group, grid) {
     const mat = toon(colors[i % 3], { outline: false })
     const particle = new THREE.Mesh(particleGeo, mat)
     particle.position.set(x, y, z)
-    particle.userData.baseY = y
-    particle.userData.phase = hashFloat(i * 41, i * 43) * Math.PI * 2
     group.add(particle)
+    sparkles.push({ mesh: particle, phase: hashFloat(i * 41, i * 43) * Math.PI * 2 })
   }
+
+  return sparkles
 }
