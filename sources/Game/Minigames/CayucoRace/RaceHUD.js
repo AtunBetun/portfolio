@@ -358,7 +358,7 @@ export default class RaceHUD {
       whiteSpace: 'nowrap',
       transition: 'opacity 0.6s ease'
     })
-    this.controlsEl.textContent = 'A / D alternate strokes  •  Match the drum'
+    this.controlsEl.textContent = 'Hold A / D — catch and release  •  Match the drum'
     this.container.appendChild(this.controlsEl)
   }
 

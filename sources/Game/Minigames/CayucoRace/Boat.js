@@ -1,13 +1,19 @@
 import * as THREE from 'three'
 import { toon } from '../../Rendering/ToonMaterials.js'
 import { RACE_CONFIG } from '../../../../data/race-config.js'
+import { rampFactor } from './logic/PaddleModel.js'
 
 const HULL_LENGTH = 5
 const HULL_HALF = HULL_LENGTH / 2
-const HULL_WIDTH = 0.8
-const LATERAL_LIMIT = 4
+const HULL_HALF_BEAM = 0.45 // half-width at the widest station
+const HULL_WIDTH = HULL_HALF_BEAM * 2
+const HULL_DEPTH = 0.4
+const HULL_RISE = 0.38 // how much bow/stern lift (rocker)
+const GUNWALE_Y = 0.24 // top edge of the hull in local space
+const LATERAL_LIMIT = 12 // open water — the buoy line is the real boundary
 const HEADING_NUDGE = 0.025
-const STROKE_ANIM_DURATION = 0.25
+const PIVOT_OUT = 0.52 // paddle pivot sits just outside the gunwale
+const RELEASE_DURATION = 0.22
 const PITCH_LERP = 0.1
 const ROLL_LERP = 0.1
 const SPLASH_COUNT = 8
@@ -35,7 +41,13 @@ export default class Boat {
     this.elapsed = 0
 
     this.paddlers = []
-    this.activeStrokes = []
+
+    // Hold-based paddle state — plant, drive while held, lift on release
+    this.holding = false
+    this.holdSide = 'left'
+    this.holdT = 0
+    this.holdWeak = false
+    this.releaseT = 0 // counts down after release for the lift-out anim
 
     this.mesh = this.buildMesh()
     this.group.add(this.mesh)
@@ -49,61 +61,30 @@ export default class Boat {
   buildMesh() {
     const boat = new THREE.Group()
 
-    // Hull — a tapered cylinder laid along Z
-    const hullGeo = new THREE.CylinderGeometry(0.12, 0.12, HULL_LENGTH, 8)
-    const hull = new THREE.Mesh(hullGeo, toon('wood'))
-    hull.rotation.x = Math.PI / 2
-    hull.scale.set(HULL_WIDTH / 0.24, 0.45, 1)
-    hull.position.y = 0.1
-    hull.castShadow = true
-    boat.add(hull)
+    // Smooth dugout hull — a U-section lofted along Z, tapering to upturned
+    // bow/stern points (a cayuco silhouette, not a cylinder with sticks).
+    const outer = this.buildHullShell(1.0, 1.0, 0, toon('wood', { side: THREE.DoubleSide }))
+    outer.castShadow = true
+    boat.add(outer)
 
-    // Bow taper — cone at the front
-    const bowGeo = new THREE.ConeGeometry(0.2, 0.8, 6)
-    const bow = new THREE.Mesh(bowGeo, toon('wood'))
-    bow.rotation.x = -Math.PI / 2
-    bow.position.set(0, 0.12, HULL_HALF + 0.3)
-    bow.scale.set(HULL_WIDTH / 0.4, 1, 0.45)
-    boat.add(bow)
+    // Darker liner nested inside for the hollowed interior look
+    const inner = this.buildHullShell(0.94, 0.62, 0.04, toon('woodDark', { side: THREE.DoubleSide }))
+    boat.add(inner)
 
-    // Stern taper
-    const sternGeo = new THREE.ConeGeometry(0.18, 0.6, 6)
-    const stern = new THREE.Mesh(sternGeo, toon('wood'))
-    stern.rotation.x = Math.PI / 2
-    stern.position.set(0, 0.12, -HULL_HALF - 0.2)
-    stern.scale.set(HULL_WIDTH / 0.36, 1, 0.45)
-    boat.add(stern)
-
-    // Interior
-    const interiorGeo = new THREE.BoxGeometry(HULL_WIDTH * 0.65, 0.06, HULL_LENGTH * 0.85)
-    const interior = new THREE.Mesh(interiorGeo, toon('woodDark'))
-    interior.position.y = 0.2
-    boat.add(interior)
-
-    // Gunwale rails
-    const railGeo = new THREE.BoxGeometry(0.04, 0.06, HULL_LENGTH * 0.9)
-    const railMat = toon('wood')
-    const railL = new THREE.Mesh(railGeo, railMat)
-    railL.position.set(-HULL_WIDTH * 0.33, 0.26, 0)
-    boat.add(railL)
-    const railR = new THREE.Mesh(railGeo, railMat)
-    railR.position.set(HULL_WIDTH * 0.33, 0.26, 0)
-    boat.add(railR)
-
-    // Cross ribs
-    const ribGeo = new THREE.BoxGeometry(HULL_WIDTH * 0.6, 0.03, 0.05)
-    const ribMat = toon('woodDark')
-    for (let i = -1; i <= 1; i++) {
-      const rib = new THREE.Mesh(ribGeo, ribMat)
-      rib.position.set(0, 0.19, i * 1.2)
-      boat.add(rib)
+    // A couple of bench thwarts spanning the interior
+    const benchMat = toon('woodDark')
+    for (const z of [1.2, -0.6]) {
+      const t = (z + HULL_HALF) / HULL_LENGTH
+      const beam = HULL_HALF_BEAM * Math.pow(Math.sin(Math.PI * t), 0.6)
+      const bench = new THREE.Mesh(new THREE.BoxGeometry(beam * 1.9, 0.05, 0.18), benchMat)
+      bench.position.set(0, GUNWALE_Y - 0.04, z)
+      boat.add(bench)
     }
 
-    // Bow ornament
-    const ornGeo = new THREE.ConeGeometry(0.05, 0.2, 4)
-    const orn = new THREE.Mesh(ornGeo, toon('accent'))
-    orn.position.set(0, 0.3, HULL_HALF + 0.5)
-    orn.rotation.x = -Math.PI / 4
+    // Bow ornament riding the upturned prow
+    const orn = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.2, 4), toon('accent'))
+    orn.position.set(0, GUNWALE_Y + HULL_RISE + 0.05, HULL_HALF - 0.05)
+    orn.rotation.x = -Math.PI / 5
     boat.add(orn)
 
     // 4 Paddlers in single file — all paddle whichever side is called
@@ -123,6 +104,45 @@ export default class Boat {
     return boat
   }
 
+  // Loft an open U-shaped cross-section along the hull length. beamScale /
+  // depthScale size the section; yShift nests the interior liner.
+  buildHullShell(beamScale, depthScale, yShift, material) {
+    const STATIONS = 28
+    const RING = 12
+    const positions = []
+
+    for (let i = 0; i < STATIONS; i++) {
+      const t = i / (STATIONS - 1) // 0 = stern, 1 = bow
+      const z = -HULL_HALF + t * HULL_LENGTH
+      const profile = Math.pow(Math.sin(Math.PI * t), 0.6) // full mid, pointed ends
+      const beam = HULL_HALF_BEAM * beamScale * profile
+      const depth = HULL_DEPTH * depthScale * (0.35 + 0.65 * profile)
+      const rocker = HULL_RISE * Math.pow(Math.abs(2 * t - 1), 2.2) // ends lift
+
+      for (let j = 0; j < RING; j++) {
+        const ang = Math.PI * (j / (RING - 1)) // 0 = port gunwale → PI = starboard
+        const x = -Math.cos(ang) * beam
+        const y = GUNWALE_Y + yShift + rocker - Math.sin(ang) * depth
+        positions.push(x, y, z)
+      }
+    }
+
+    const index = []
+    for (let i = 0; i < STATIONS - 1; i++) {
+      for (let j = 0; j < RING - 1; j++) {
+        const a = i * RING + j
+        const b = a + RING
+        index.push(a, b, b + 1, a, b + 1, a + 1)
+      }
+    }
+
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+    geo.setIndex(index)
+    geo.computeVertexNormals()
+    return new THREE.Mesh(geo, material)
+  }
+
   createPaddler(seat) {
     const group = new THREE.Group()
     group.position.set(seat.x, 0.28, seat.z)
@@ -139,11 +159,11 @@ export default class Boat {
     head.position.y = 0.32
     group.add(head)
 
-    // Paddle pivot — placed on the side that's being stroked.
+    // Paddle pivot — sits just outside the gunwale on the stroking side.
     // With heading PI the boat faces -Z, so positive local X is screen-left.
-    // We create the pivot at neutral and reposition it dynamically in paddle().
+    // Repositioned per side in plantPaddle(); rotation.x sweeps bow→stern.
     const pivot = new THREE.Group()
-    pivot.position.set(0.15, 0.24, 0)
+    pivot.position.set(PIVOT_OUT, GUNWALE_Y, 0)
 
     const shaftGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.7, 5)
     const shaft = new THREE.Mesh(shaftGeo, toon('wood'))
@@ -161,7 +181,6 @@ export default class Boat {
       group,
       pivot,
       activeSide: 'left',
-      phase: 0,
       idlePhase: Math.random() * Math.PI * 2
     }
   }
@@ -232,20 +251,33 @@ export default class Boat {
     this.mesh.position.set(meshX, this.position.y, meshZ)
     this.mesh.rotation.set(this.currentPitch, this.heading, this.currentRoll)
 
-    // Paddler idle animation — gentle lean
-    for (const p of this.paddlers) {
-      if (p.phase > 0) {
-        // Active stroke animation — fatigued strokes are shallow and floppy
-        p.phase = Math.max(0, p.phase - delta / STROKE_ANIM_DURATION)
-        const amp = p.weak ? 0.45 : 0.9
-        const swing = Math.sin(p.phase * Math.PI)
-        const sign = p.activeSide === 'left' ? -1 : 1
-        p.pivot.rotation.z = sign * swing * amp
-        p.pivot.rotation.x = swing * (p.weak ? 0.25 : 0.5)
-      } else {
-        // Idle sway
-        const sway = Math.sin(this.elapsed * 1.8 + p.idlePhase) * 0.05
-        p.pivot.rotation.z = sway
+    // Paddle animation. All paddlers move together.
+    // Sweep travels bow (rotation.x = -0.6) → stern (+0.8): the blade pulls
+    // water backward, driving the boat forward. Roll sign keeps the shaft
+    // outside the hull so it never clips the gunwale.
+    const rollSign = this.holdSide === 'left' ? 1 : -1
+    if (this.holding) {
+      this.holdT += delta
+      const grip = rampFactor(this.holdT, RACE_CONFIG.stroke)
+      const dip = this.holdWeak ? 0.55 : 1.0
+      // Blade sweeps bow→stern as grip builds, then eases at the stall
+      const sweep = THREE.MathUtils.lerp(-0.6, 0.8, Math.min(this.holdT / 0.5, 1)) * dip
+      for (const p of this.paddlers) {
+        p.pivot.rotation.x = sweep
+        p.pivot.rotation.z = rollSign * 0.15 * dip * grip
+      }
+    } else if (this.releaseT > 0) {
+      // Lift-out — blade rolls up and out, easing back to idle carry
+      this.releaseT = Math.max(0, this.releaseT - delta)
+      const t = 1 - this.releaseT / RELEASE_DURATION
+      for (const p of this.paddlers) {
+        p.pivot.rotation.x = THREE.MathUtils.lerp(0.8, 0, t)
+        p.pivot.rotation.z = this.lastRollSign * THREE.MathUtils.lerp(0.6, 0, t)
+      }
+    } else {
+      // Idle sway
+      for (const p of this.paddlers) {
+        p.pivot.rotation.z = Math.sin(this.elapsed * 1.8 + p.idlePhase) * 0.05
         p.pivot.rotation.x = Math.sin(this.elapsed * 1.2 + p.idlePhase) * 0.03
         p.group.rotation.x = Math.sin(this.elapsed * 0.9 + p.idlePhase) * 0.02
       }
@@ -279,17 +311,21 @@ export default class Boat {
     this.updatePool(this.sprayPool, delta)
   }
 
-  paddle(side, { weak = false } = {}) {
-    // ALL paddlers stroke together on the called side.
-    // Move the paddle pivot to the correct screen-side:
+  // Catch — plant the blade in the water on the called side and begin the hold.
+  plantPaddle(side, { weak = false } = {}) {
+    // Pivot moves to the correct screen-side, just outside the gunwale.
     // heading PI means positive local X = screen-left.
-    const pivotX = side === 'left' ? 0.15 : -0.15
+    const pivotX = side === 'left' ? PIVOT_OUT : -PIVOT_OUT
     for (const p of this.paddlers) {
-      p.phase = 1
       p.activeSide = side
-      p.weak = weak
       p.pivot.position.x = pivotX
     }
+
+    this.holding = true
+    this.holdSide = side
+    this.holdT = 0
+    this.holdWeak = weak
+    this.releaseT = 0
 
     // Left paddles in water → boat turns right, and vice versa.
     // With heading PI (facing -Z), decreasing heading veers screen-right.
@@ -298,6 +334,15 @@ export default class Boat {
     // Fatigued form reads as splashy, ineffective strokes
     this.spawnSplash(side, weak ? 8 : 5, weak)
     return true
+  }
+
+  // Release — lift the blade out; a small exit splash trails the stroke.
+  releasePaddle() {
+    if (!this.holding) return
+    this.holding = false
+    this.releaseT = RELEASE_DURATION
+    this.lastRollSign = this.holdSide === 'left' ? 1 : -1
+    this.spawnSplash(this.holdSide, 3, false)
   }
 
   setSurfing(surfing) {
@@ -330,9 +375,12 @@ export default class Boat {
     this.mesh.position.set(0, 0, 0)
     this.mesh.rotation.set(0, 0, 0)
 
+    this.holding = false
+    this.holdT = 0
+    this.holdWeak = false
+    this.releaseT = 0
     for (const p of this.paddlers) {
-      p.phase = 0
-      p.weak = false
+      p.pivot.rotation.set(0, 0, 0)
     }
     this.clearPool(this.splashPool)
     this.clearPool(this.wakePool)

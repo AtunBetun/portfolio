@@ -6,10 +6,8 @@ describe('RACE_CONFIG', () => {
   it('exports all required top-level keys', () => {
     const requiredKeys = [
       'courseLength',
-      'strokeImpulse',
+      'stroke',
       'dragHalfLife',
-      'paddleCooldown',
-      'inputBuffer',
       'maxSpeed',
       'rhythm',
       'stamina',
@@ -167,11 +165,15 @@ describe('RACE_CONFIG', () => {
 
   describe('drag equilibrium sanity', () => {
     it('reaches meaningful speed at cruise cadence', () => {
-      const { strokeImpulse, dragHalfLife } = RACE_CONFIG
+      const { stroke, dragHalfLife } = RACE_CONFIG
       const cruise = RACE_CONFIG.acts.find((a) => a.id === 'cruise')
       const strokesPerSecond = cruise.drumBpm / 60
+      // Per-stroke energy: bite + drive over a ~0.35s hold (mostly full grip) + clean bonus
+      const holdT = 0.35
+      const drive = stroke.thrustPerSec * (holdT - stroke.rampTime / 2)
+      const perStroke = stroke.biteImpulse + drive + stroke.cleanBonus
       const dragRate = Math.LN2 / (dragHalfLife * cruise.dragMult)
-      const equilibriumSpeed = (strokeImpulse * cruise.impulseMult * strokesPerSecond) / dragRate
+      const equilibriumSpeed = (perStroke * cruise.impulseMult * strokesPerSecond) / dragRate
       expect(equilibriumSpeed).toBeGreaterThan(5)
     })
 

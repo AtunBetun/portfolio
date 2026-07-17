@@ -1,10 +1,19 @@
 export const RACE_CONFIG = {
-  courseLength: 1080,
-  strokeImpulse: 2.0,
+  courseLength: 1500,
   dragHalfLife: 2.2,
-  paddleCooldown: 0.18,
-  inputBuffer: 0.08,
   maxSpeed: 14,
+
+  stroke: {
+    biteImpulse: 0.6,
+    thrustPerSec: 5.8,
+    rampTime: 0.15,
+    stallStart: 0.6,
+    stallTau: 0.25,
+    cleanWindow: [0.15, 0.7],
+    cleanBonus: 0.24,
+    recovery: 0.12,
+    maxHold: 1.5
+  },
 
   // Tempo-matching core — the player's rolling stroke BPM against each act's zone
   rhythm: {
@@ -54,7 +63,7 @@ export const RACE_CONFIG = {
       end: 0.15,
       bpmZone: [125, 155],
       seaPhase: 0,
-      impulseMult: 1.0,
+      impulseMult: 1.25,
       dragMult: 1.0,
       drumBpm: 140
     },
@@ -66,7 +75,7 @@ export const RACE_CONFIG = {
       end: 0.4,
       bpmZone: [88, 112],
       seaPhase: 0,
-      impulseMult: 1.15,
+      impulseMult: 1.1,
       dragMult: 1.0,
       drumBpm: 100
     },
@@ -78,7 +87,7 @@ export const RACE_CONFIG = {
       end: 0.65,
       bpmZone: [78, 102],
       seaPhase: 1,
-      impulseMult: 1.1,
+      impulseMult: 1.0,
       dragMult: 1.0,
       drumBpm: 90,
       surf: {
@@ -94,7 +103,7 @@ export const RACE_CONFIG = {
       end: 0.85,
       bpmZone: [58, 82],
       seaPhase: 2,
-      impulseMult: 1.7,
+      impulseMult: 1.05,
       dragMult: 0.8,
       drumBpm: 70
     },
@@ -106,7 +115,7 @@ export const RACE_CONFIG = {
       end: 1.0,
       bpmZone: [135, 165],
       seaPhase: 2,
-      impulseMult: 0.95,
+      impulseMult: 1.25,
       dragMult: 1.0,
       drumBpm: 150
     }
@@ -119,9 +128,9 @@ export const RACE_CONFIG = {
   },
 
   medals: {
-    gold: 92,
-    silver: 105,
-    bronze: 120
+    gold: 120,
+    silver: 138,
+    bronze: 156
   },
 
   drift: {

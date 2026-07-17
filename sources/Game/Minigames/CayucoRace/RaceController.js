@@ -8,7 +8,7 @@ import RaceCourse from './RaceCourse.js'
 import RaceHUD from './RaceHUD.js'
 import RaceCamera from './RaceCamera.js'
 import RhythmTracker from './logic/RhythmTracker.js'
-import { efficiency } from './logic/PaddleModel.js'
+import { efficiency, rampFactor } from './logic/PaddleModel.js'
 import StaminaModel from './logic/StaminaModel.js'
 import SurfLogic from './logic/SurfLogic.js'
 import ActTrack from './logic/ActTrack.js'
@@ -54,9 +54,10 @@ export class CayucoRace {
     this.activeSurf = null
     this.activeSurfWave = null
 
-    // Input
-    this.paddleCooldown = 0
-    this.bufferedInput = null
+    // Input — hold-based catch-and-release. One stroke at a time.
+    this.stroke = null // { side, holdT, mult, weak, pointerId }  (pointerId null = keyboard)
+    this.recovery = 0
+    this.bufferedCatch = null
 
     this.timeScale = 1
 
@@ -68,7 +69,11 @@ export class CayucoRace {
 
     this.tickHandler = null
     this.keyHandler = null
+    this.keyUpHandler = null
     this.touchHandler = null
+    this.pointerUpHandler = null
+    this.blurHandler = null
+    this.originalFog = null
   }
 
   on(event, callback) {
@@ -107,9 +112,26 @@ export class CayucoRace {
 
     this.keyHandler = (event) => this.onKeyDown(event)
     window.addEventListener('keydown', this.keyHandler)
+    this.keyUpHandler = (event) => this.onKeyUp(event)
+    window.addEventListener('keyup', this.keyUpHandler)
 
     this.touchHandler = (event) => this.onPointerDown(event)
     window.addEventListener('pointerdown', this.touchHandler)
+    this.pointerUpHandler = (event) => this.onPointerUp(event)
+    window.addEventListener('pointerup', this.pointerUpHandler)
+    window.addEventListener('pointercancel', this.pointerUpHandler)
+
+    // Lost focus can swallow keyup — force-release so the paddle never sticks
+    this.blurHandler = () => this.onBlur()
+    window.addEventListener('blur', this.blurHandler)
+
+    // Longer view for the open ocean — restored on dispose
+    const fog = this.game.scene.fog
+    if (fog) {
+      this.originalFog = { near: fog.near, far: fog.far }
+      fog.near = 60
+      fog.far = 260
+    }
 
     // Camera enters countdown fly-in mode on activation
     this.raceCamera.activate()
@@ -144,8 +166,9 @@ export class CayucoRace {
     this.activeSurf = null
     this.activeSurfWave = null
 
-    this.paddleCooldown = 0
-    this.bufferedInput = null
+    this.stroke = null
+    this.recovery = 0
+    this.bufferedCatch = null
 
     this.timeScale = 1
 
@@ -168,6 +191,7 @@ export class CayucoRace {
 
     if (this.audio) {
       this.audio.setDrumBpm(act.drumBpm)
+      this.audio.setAct(this.actTrack.index)
       this.audio.setInZone(false)
       this.audio.setSurfState('off')
     }
@@ -239,6 +263,15 @@ export class CayucoRace {
       this.stamina.update(dt, this.tracker.bpm, this.staminaZone())
     }
 
+    // Drive — while the paddle is held it pulls water: quick bite (applied at
+    // catch), a ramp to full grip, then a stall so holding forever never wins.
+    if (this.stroke && !this.finishSequenceActive) {
+      const s = RACE_CONFIG.stroke
+      this.stroke.holdT += dt
+      this.speed += s.thrustPerSec * rampFactor(this.stroke.holdT, s) * this.stroke.mult * dt
+      if (this.stroke.holdT >= s.maxHold) this.releaseStroke()
+    }
+
     const surfing = this.activeSurf?.surfing === true
 
     if (surfing) {
@@ -261,6 +294,7 @@ export class CayucoRace {
     this.waveSystem.update(dt, this.boat.position.z)
 
     this.raceCourse.updateProgress(this.boat.position)
+    this.raceCourse.updateBuoys(this.boat.position.z, (x, z) => this.waveSystem.getHeightAt(x, z))
     const progress = this.raceCourse.getProgress()
 
     this.updateAct(progress)
@@ -287,13 +321,15 @@ export class CayucoRace {
       this.hud.hideSpeedlines()
     }
 
-    // Cooldown + buffered input — a stroke queued near the cooldown's end
-    // fires the frame the cooldown expires
-    this.paddleCooldown = Math.max(0, this.paddleCooldown - dt)
-    if (this.paddleCooldown === 0 && this.bufferedInput) {
-      const side = this.bufferedInput
-      this.bufferedInput = null
-      this.handleInput(side)
+    // Post-release lockout — a catch pressed during recovery fires the frame
+    // it expires (input buffer)
+    if (this.recovery > 0) {
+      this.recovery = Math.max(0, this.recovery - dt)
+      if (this.recovery === 0 && this.bufferedCatch) {
+        const side = this.bufferedCatch
+        this.bufferedCatch = null
+        this.beginCatch(side)
+      }
     }
 
     if (this.finishSequenceActive) {
@@ -322,6 +358,7 @@ export class CayucoRace {
     this.hud.showActBanner(act.name, act.hint)
     this.hud.moveTempoZone(act.bpmZone)
     this.audio.setDrumBpm(act.drumBpm)
+    this.audio.setAct(this.actTrack.index)
     this.audio.playStinger()
     this.events.trigger('act-change', act)
   }
@@ -375,13 +412,21 @@ export class CayucoRace {
     }
   }
 
-  handleInput(side) {
+  // Catch — the paddle plants in the water. This timestamp is the "stroke"
+  // the rhythm tracker measures. Stroke quality (tempo × stamina) is sampled
+  // once here and reused for the whole hold.
+  beginCatch(side, pointerId = null) {
     if (this.state !== 'racing' || this.finishSequenceActive) return
 
-    if (this.paddleCooldown > 0) {
-      if (this.paddleCooldown < RACE_CONFIG.inputBuffer) {
-        this.bufferedInput = side
-      }
+    // Mid-hold press on the other side supersedes — fast alternation overlaps
+    if (this.stroke) {
+      if (this.stroke.side === side) return
+      this.releaseStroke()
+    }
+
+    // Post-release lockout — buffer the catch so it fires when recovery ends
+    if (this.recovery > 0) {
+      this.bufferedCatch = side
       return
     }
 
@@ -389,23 +434,39 @@ export class CayucoRace {
     this.stamina.onStroke({ alternated })
 
     const weak = this.stamina.fatigued
-    this.boat.paddle(side, { weak })
 
     // Stroke power = base × act character × tempo efficiency × stamina form.
     // The first few strokes are grace — the launch is never punished.
     const act = this.currentAct
     const graced = this.tracker.strokeCount <= RACE_CONFIG.rhythm.graceStrokes
     const eff = graced ? 1 : efficiency(this.tracker.bpm, act.bpmZone, RACE_CONFIG.rhythm)
-    const impulse = RACE_CONFIG.strokeImpulse * act.impulseMult * eff * this.stamina.strokeFactor()
+    const mult = act.impulseMult * eff * this.stamina.strokeFactor()
 
-    this.speed += impulse
+    this.stroke = { side, holdT: 0, mult, weak, pointerId }
+
+    this.speed += RACE_CONFIG.stroke.biteImpulse * mult
     const cap = this.activeSurf?.surfing ? RACE_CONFIG.surf.surfMaxSpeed : RACE_CONFIG.maxSpeed
     this.speed = Math.min(this.speed, cap)
 
-    this.paddleCooldown = RACE_CONFIG.paddleCooldown
-
+    this.boat.plantPaddle(side, { weak })
     this.raceCamera.kick('stroke')
     this.audio.playSplash(weak)
+  }
+
+  // Release — blade exits. A clean release inside the hold window earns a
+  // small bonus. Safe to call anytime (no state guard) so blur/finish can use it.
+  releaseStroke() {
+    if (!this.stroke) return
+
+    const s = RACE_CONFIG.stroke
+    const holdT = this.stroke.holdT
+    if (holdT >= s.cleanWindow[0] && holdT <= s.cleanWindow[1]) {
+      this.speed += s.cleanBonus * this.stroke.mult
+    }
+
+    this.boat.releasePaddle()
+    this.recovery = s.recovery
+    this.stroke = null
   }
 
   finish() {
@@ -413,6 +474,10 @@ export class CayucoRace {
     this.finishDelay = 0
     this.finishTime = this.raceTime
     this.timeScale = SLOWMO_SCALE
+
+    // Lift the paddle out before the cinematic
+    this.releaseStroke()
+    this.bufferedCatch = null
 
     this.hud.hideCountdown()
     this.hud.hideTelegraph()
@@ -472,26 +537,30 @@ export class CayucoRace {
     this.dispose()
   }
 
+  keySide(key) {
+    if (key === 'a' || key === 'A' || key === 'ArrowLeft') return 'left'
+    if (key === 'd' || key === 'D' || key === 'ArrowRight') return 'right'
+    return null
+  }
+
   onKeyDown(event) {
     if (this.state !== 'racing') return
-    // Held keys auto-repeat at ~30Hz — that's not paddling
+    // Held keys auto-repeat at ~30Hz — the OS repeat is not a new catch
     if (event.repeat) return
 
-    this.audio.unlock()
+    const side = this.keySide(event.key)
+    if (!side) return
 
-    switch (event.key) {
-      case 'a':
-      case 'A':
-      case 'ArrowLeft':
-        this.handleInput('left')
-        break
-      case 'd':
-      case 'D':
-      case 'ArrowRight':
-        this.handleInput('right')
-        break
-      default:
-        break
+    this.audio.unlock()
+    this.beginCatch(side)
+  }
+
+  onKeyUp(event) {
+    const side = this.keySide(event.key)
+    if (!side) return
+    // Only release if this key owns the active (keyboard) stroke
+    if (this.stroke && this.stroke.pointerId === null && this.stroke.side === side) {
+      this.releaseStroke()
     }
   }
 
@@ -501,7 +570,18 @@ export class CayucoRace {
     this.audio.unlock()
 
     const side = event.clientX < window.innerWidth / 2 ? 'left' : 'right'
-    this.handleInput(side)
+    this.beginCatch(side, event.pointerId)
+  }
+
+  onPointerUp(event) {
+    if (this.stroke && this.stroke.pointerId === event.pointerId) {
+      this.releaseStroke()
+    }
+  }
+
+  onBlur() {
+    this.releaseStroke()
+    this.bufferedCatch = null
   }
 
   dispose() {
@@ -513,9 +593,27 @@ export class CayucoRace {
       window.removeEventListener('keydown', this.keyHandler)
       this.keyHandler = null
     }
+    if (this.keyUpHandler) {
+      window.removeEventListener('keyup', this.keyUpHandler)
+      this.keyUpHandler = null
+    }
     if (this.touchHandler) {
       window.removeEventListener('pointerdown', this.touchHandler)
       this.touchHandler = null
+    }
+    if (this.pointerUpHandler) {
+      window.removeEventListener('pointerup', this.pointerUpHandler)
+      window.removeEventListener('pointercancel', this.pointerUpHandler)
+      this.pointerUpHandler = null
+    }
+    if (this.blurHandler) {
+      window.removeEventListener('blur', this.blurHandler)
+      this.blurHandler = null
+    }
+    if (this.originalFog && this.game.scene.fog) {
+      this.game.scene.fog.near = this.originalFog.near
+      this.game.scene.fog.far = this.originalFog.far
+      this.originalFog = null
     }
 
     if (this.audio) {

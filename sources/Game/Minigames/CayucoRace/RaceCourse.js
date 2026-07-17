@@ -2,8 +2,18 @@ import * as THREE from 'three'
 import { toon } from '../../Rendering/ToonMaterials.js'
 import { RACE_CONFIG } from '../../../../data/race-config.js'
 
-const LANE_MARKER_SPACING = 20
 const LANE_HALF_WIDTH = 6
+const BUOY_SPACING = 25
+const BUOY_BASE_X = -7 // player's right (heading PI → screen-right is world -X)
+const BUOY_MEANDER_AMP = 2
+const BUOY_MEANDER_WAVELENGTH = 150
+const BUOY_VISIBLE_RANGE = 160 // only bob buoys near the boat
+
+// The right-hand boundary line. Gentle sine meander so it isn't a ruler-straight
+// wall — the buoys mark where the player must stay left of (elimination later).
+function buoyX(z) {
+  return BUOY_BASE_X + Math.sin(z / BUOY_MEANDER_WAVELENGTH * Math.PI * 2) * BUOY_MEANDER_AMP
+}
 
 export default class RaceCourse {
   constructor(group) {
@@ -12,46 +22,38 @@ export default class RaceCourse {
     this.progress = 0
     this.finished = false
     this.meshes = []
+    this.buoys = []
 
-    this.path = this.createPath()
-    this.createLaneMarkers()
+    this.createBuoys()
     this.startLine = this.createLine(0, 'sand')
     this.finishLine = this.createLine(-this.courseLength, 'accent')
   }
 
-  createPath() {
-    const length = this.courseLength
-    const points = [
-      new THREE.Vector3(0, 0, 0),
-      new THREE.Vector3(0, 0, -length * 0.15),
-      new THREE.Vector3(25, 0, -length * 0.3),
-      new THREE.Vector3(25, 0, -length * 0.45),
-      new THREE.Vector3(-20, 0, -length * 0.6),
-      new THREE.Vector3(-20, 0, -length * 0.8),
-      new THREE.Vector3(0, 0, -length)
-    ]
-    return new THREE.CatmullRomCurve3(points)
-  }
+  createBuoys() {
+    // Shared geometry/material across all buoys — one draw setup, cheap
+    const floatGeo = new THREE.SphereGeometry(0.35, 8, 6)
+    const tipGeo = new THREE.ConeGeometry(0.18, 0.3, 6)
+    const mat = toon('accent')
+    this.buoyMat = mat
+    this.buoyGeos = [floatGeo, tipGeo]
 
-  createLaneMarkers() {
-    const markerGeometry = new THREE.BoxGeometry(0.3, 0.15, 2)
-    const markerMaterial = toon('sand', { transparent: true, opacity: 0.5 })
-    const count = Math.floor(this.courseLength / LANE_MARKER_SPACING) + 1
-
+    const count = Math.floor(this.courseLength / BUOY_SPACING) + 1
     for (let i = 0; i < count; i++) {
-      const t = i / (count - 1)
-      const center = this.path.getPoint(t)
-      const tangent = this.path.getTangent(t)
-      const side = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize()
+      const z = -i * BUOY_SPACING
+      const x = buoyX(z)
 
-      for (const direction of [-1, 1]) {
-        const marker = new THREE.Mesh(markerGeometry, markerMaterial)
-        marker.position.copy(center).addScaledVector(side, LANE_HALF_WIDTH * direction)
-        marker.position.y = 0.1
-        marker.lookAt(marker.position.clone().add(tangent))
-        this.group.add(marker)
-        this.meshes.push(marker)
-      }
+      const buoy = new THREE.Group()
+      const float = new THREE.Mesh(floatGeo, mat)
+      float.scale.set(1, 0.8, 1)
+      buoy.add(float)
+      const tip = new THREE.Mesh(tipGeo, mat)
+      tip.position.y = 0.32
+      buoy.add(tip)
+
+      buoy.position.set(x, 0, z)
+      this.group.add(buoy)
+      this.buoys.push(buoy)
+      this.meshes.push(buoy)
     }
   }
 
@@ -77,16 +79,20 @@ export default class RaceCourse {
     }
   }
 
+  // Bob buoys on the water surface — only those near the boat, to stay cheap.
+  updateBuoys(boatZ, getHeightAt) {
+    for (const buoy of this.buoys) {
+      if (Math.abs(buoy.position.z - boatZ) > BUOY_VISIBLE_RANGE) continue
+      buoy.position.y = getHeightAt(buoy.position.x, buoy.position.z)
+    }
+  }
+
   getProgress() {
     return this.progress
   }
 
   isFinished() {
     return this.finished
-  }
-
-  getCourseDirection(progress) {
-    return this.path.getTangent(THREE.MathUtils.clamp(progress, 0, 1)).normalize()
   }
 
   reset() {
@@ -97,9 +103,14 @@ export default class RaceCourse {
   dispose() {
     for (const mesh of this.meshes) {
       this.group.remove(mesh)
-      mesh.geometry.dispose()
-      mesh.material.dispose()
     }
+    for (const geo of this.buoyGeos) geo.dispose()
+    this.buoyMat.dispose()
+    this.startLine.geometry.dispose()
+    this.startLine.material.dispose()
+    this.finishLine.geometry.dispose()
+    this.finishLine.material.dispose()
     this.meshes = []
+    this.buoys = []
   }
 }

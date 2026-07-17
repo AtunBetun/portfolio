@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'bun:test'
 import { RACE_CONFIG } from '../../data/race-config.js'
 import RhythmTracker from '../../sources/Game/Minigames/CayucoRace/logic/RhythmTracker.js'
-import { efficiency } from '../../sources/Game/Minigames/CayucoRace/logic/PaddleModel.js'
+import { efficiency, rampFactor } from '../../sources/Game/Minigames/CayucoRace/logic/PaddleModel.js'
 import StaminaModel from '../../sources/Game/Minigames/CayucoRace/logic/StaminaModel.js'
 import ActTrack from '../../sources/Game/Minigames/CayucoRace/logic/ActTrack.js'
 
@@ -15,8 +15,11 @@ const MAX_SIM_TIME = 300
 
 // bpmFor(act) decides the stroke tempo the scripted player holds per act.
 // catchesWaves grants the surf speed boost for surfDuration per scheduled swell.
-function simulateRace({ bpmFor, catchesWaves }) {
+// holdDuty is the fraction of the stroke period the player holds the paddle
+// down; neverRelease models a player who just mashes the key and holds forever.
+function simulateRace({ bpmFor, catchesWaves, holdDuty = 0.6, neverRelease = false }) {
   const cfg = RACE_CONFIG
+  const s = cfg.stroke
   const tracker = new RhythmTracker(cfg.rhythm)
   const stamina = new StaminaModel(cfg.stamina)
   const actTrack = new ActTrack(cfg.acts)
@@ -25,10 +28,16 @@ function simulateRace({ bpmFor, catchesWaves }) {
   let z = 0
   let speed = 0
   let side = 'left'
-  let nextStrokeAt = 0
+  let nextCatchAt = 0
   let nextSurfIndex = 0
   let surfTimeLeft = 0
   let wavesCaught = 0
+
+  // Hold-based stroke state
+  let holding = false
+  let holdT = 0
+  let holdFor = 0
+  let mult = 0
 
   while (z > -cfg.courseLength && time < MAX_SIM_TIME) {
     const progress = Math.min(-z / cfg.courseLength, 1)
@@ -52,19 +61,39 @@ function simulateRace({ bpmFor, catchesWaves }) {
     tracker.update(time)
     stamina.update(DT, tracker.bpm, act.bpmZone)
 
-    // Strokes at the scripted tempo
-    if (time >= nextStrokeAt) {
+    // Catch — plant the paddle at the scripted tempo, sample power once
+    if (!holding && time >= nextCatchAt) {
       const targetBpm = bpmFor(act, surfing)
+      const period = 60 / targetBpm
       const { alternated } = tracker.recordStroke(time, side)
       stamina.onStroke({ alternated })
       side = side === 'left' ? 'right' : 'left'
-      nextStrokeAt = time + 60 / targetBpm
+      nextCatchAt = time + period
 
       const graced = tracker.strokeCount <= cfg.rhythm.graceStrokes
       const eff = graced ? 1 : efficiency(tracker.bpm, act.bpmZone, cfg.rhythm)
-      speed += cfg.strokeImpulse * act.impulseMult * eff * stamina.strokeFactor()
-      speed = Math.min(speed, surfing ? cfg.surf.surfMaxSpeed : cfg.maxSpeed)
+      mult = act.impulseMult * eff * stamina.strokeFactor()
+
+      speed += s.biteImpulse * mult
+      holdFor = neverRelease
+        ? Infinity
+        : Math.max(s.rampTime, Math.min(holdDuty * period, s.stallStart))
+      holdT = 0
+      holding = true
     }
+
+    // Drive — thrust while held, then release (clean bonus inside the window)
+    if (holding) {
+      speed += s.thrustPerSec * rampFactor(holdT, s) * mult * DT
+      holdT += DT
+      if (holdT >= holdFor || holdT >= s.maxHold) {
+        holding = false
+        if (holdT >= s.cleanWindow[0] && holdT <= s.cleanWindow[1]) {
+          speed += s.cleanBonus * mult
+        }
+      }
+    }
+    speed = Math.min(speed, surfing ? cfg.surf.surfMaxSpeed : cfg.maxSpeed)
 
     if (surfing) {
       surfTimeLeft -= DT
@@ -85,7 +114,7 @@ function simulateRace({ bpmFor, catchesWaves }) {
 }
 
 describe('race pace simulation', () => {
-  it('a perfect player finishes in 85-95s and earns gold', () => {
+  it('a perfect player finishes near 2 minutes and earns gold', () => {
     const result = simulateRace({
       bpmFor: (act, surfing) => {
         if (surfing) return (act.bpmZone[0] + act.bpmZone[1]) / 2
@@ -99,9 +128,23 @@ describe('race pace simulation', () => {
     })
 
     expect(result.wavesCaught).toBe(3)
-    expect(result.time).toBeGreaterThan(85)
-    expect(result.time).toBeLessThan(95)
+    expect(result.time).toBeGreaterThan(105)
+    expect(result.time).toBeLessThan(125)
     expect(result.time).toBeLessThanOrEqual(RACE_CONFIG.medals.gold)
+  })
+
+  it('a player who never releases (mashes and holds) is far slower — the stall bites', () => {
+    const perfect = simulateRace({
+      bpmFor: (act) => (act.bpmZone[0] + act.bpmZone[1]) / 2,
+      catchesWaves: false
+    })
+    const holder = simulateRace({
+      bpmFor: (act) => (act.bpmZone[0] + act.bpmZone[1]) / 2,
+      catchesWaves: false,
+      neverRelease: true
+    })
+
+    expect(holder.time).toBeGreaterThan(perfect.time * 1.3)
   })
 
   it('a sloppy player (wobbling tempo, misses waves) lands between gold and bronze', () => {

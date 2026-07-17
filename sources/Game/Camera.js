@@ -22,7 +22,7 @@ export default class Camera {
       55,
       window.innerWidth / window.innerHeight,
       0.1,
-      200
+      500
     )
     this.instance.position.copy(this.currentPos)
     this.instance.lookAt(0, 0, 0)

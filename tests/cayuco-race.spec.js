@@ -82,7 +82,7 @@ test('race can be exited cleanly', async ({ page }) => {
   expect(raceHudGone).toBe(true)
 })
 
-test('strokes after countdown produce BPM reading', async ({ page }) => {
+test('held catch-and-release strokes produce BPM and drive the boat', async ({ page }) => {
   await page.goto('/')
   await page.waitForFunction(() => window.__game?.loadState === 'ready', { timeout: 15000 })
 
@@ -96,10 +96,13 @@ test('strokes after countdown produce BPM reading', async ({ page }) => {
   // Wait for 3 s countdown to pass
   await page.waitForTimeout(4000)
 
-  // Alternate A/D at ~120 BPM (every 500ms)
+  // Alternate A/D holds (~300ms down) at ~100 BPM — a real catch-and-release
   for (let i = 0; i < 8; i++) {
-    await page.keyboard.press(i % 2 === 0 ? 'a' : 'd')
-    await page.waitForTimeout(500)
+    const key = i % 2 === 0 ? 'a' : 'd'
+    await page.keyboard.down(key)
+    await page.waitForTimeout(300)
+    await page.keyboard.up(key)
+    await page.waitForTimeout(300)
   }
 
   const bpmText = await page.evaluate(
@@ -107,6 +110,10 @@ test('strokes after countdown produce BPM reading', async ({ page }) => {
   )
   const bpmNumber = parseInt(bpmText, 10)
   expect(bpmNumber).toBeGreaterThan(0)
+
+  // Holding the paddle must actually move the boat down the course
+  const movedZ = await page.evaluate(() => window.__testRace?.boat.position.z)
+  expect(movedZ).toBeLessThan(-1)
 
   const state = await page.evaluate(() => window.__testRace?.state)
   expect(state).toBe('racing')

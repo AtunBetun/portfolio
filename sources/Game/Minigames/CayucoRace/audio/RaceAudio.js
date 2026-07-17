@@ -7,6 +7,28 @@
 
 import AudioEngine from './AudioEngine.js'
 
+// Pentatonic scale — semitone offsets from each act's root. Nothing here can
+// clash, so any pattern sounds musical.
+const SCALE = [0, 3, 5, 7, 10, 12]
+
+// 8-step (eighth-note) marimba patterns; entries index SCALE, null = rest.
+const PATTERNS = {
+  calm: [0, null, 2, null, 4, null, 2, null],
+  waves: [0, 2, 4, 5, 4, 2, 0, null],
+  sparse: [0, null, null, null, 3, null, null, null],
+  sprint: [4, 5, 4, 2, 5, 4, 2, 0]
+}
+
+// Per-act voicing, indexed by act order. Intensity grows then drops for the
+// headwind grind and peaks in the sprint.
+const LAYERS = [
+  { shaker: false, pattern: null, root: 0 }, //   launch — drum only
+  { shaker: true, pattern: PATTERNS.calm, root: 220 }, // cruise
+  { shaker: true, pattern: PATTERNS.waves, root: 262 }, // waves
+  { shaker: false, pattern: PATTERNS.sparse, root: 165 }, // headwind — sparse + low
+  { shaker: true, pattern: PATTERNS.sprint, root: 330 } //  sprint — busy + bright
+]
+
 export default class RaceAudio {
   constructor(cfg = {}) {
     this.cfg = {
@@ -21,8 +43,9 @@ export default class RaceAudio {
     this.drumBpm = 100
     this.drumRunning = false
     this.nextBeatTime = 0
-    this.beatCount = 0
+    this.beatCount = 0 // counts eighth-notes now
     this.schedulerId = null
+    this.layer = LAYERS[0] // current act's voicing
 
     this.shimmer = null // { gain, oscA, oscB }
     this.rumble = null // { gain, source, filter }
@@ -57,12 +80,72 @@ export default class RaceAudio {
       if (this.nextBeatTime === null) {
         this.nextBeatTime = ctx.currentTime + 0.05
       }
+      // Scheduler runs at eighth-note resolution so the shaker and marimba
+      // can land between the drum's quarter-note pulses.
+      const eighth = 30 / this.drumBpm
       while (this.nextBeatTime < ctx.currentTime + this.cfg.lookahead) {
-        this.playDrumHit(this.nextBeatTime, this.beatCount % 2 === 0)
+        this.scheduleStep(this.nextBeatTime, this.beatCount)
         this.beatCount += 1
-        this.nextBeatTime += 60 / this.drumBpm
+        this.nextBeatTime += eighth
       }
     }, this.cfg.schedulerInterval * 1000)
+  }
+
+  // One eighth-note step: drum on the beat, shaker offbeats, melody per pattern.
+  scheduleStep(time, count) {
+    const onBeat = count % 2 === 0
+    const step = Math.floor(count / 2) % 4 // quarter-beat within the bar
+
+    if (onBeat) {
+      this.playDrumHit(time, step === 0)
+    } else if (this.layer.shaker) {
+      this.playShaker(time)
+    }
+
+    if (this.layer.pattern) {
+      const degree = this.layer.pattern[count % this.layer.pattern.length]
+      if (degree !== null && degree !== undefined) {
+        this.playMarimba(time, this.layer.root * Math.pow(2, SCALE[degree] / 12))
+      }
+    }
+  }
+
+  // Offbeat shaker — a short bright noise tick
+  playShaker(time) {
+    const ctx = this.engine.ctx
+    const noise = ctx.createBufferSource()
+    noise.buffer = this.engine.getNoiseBuffer()
+    const filter = ctx.createBiquadFilter()
+    filter.type = 'highpass'
+    filter.frequency.value = 6000
+    const gain = ctx.createGain()
+    gain.gain.setValueAtTime(this.cfg.drumGain * 0.25, time)
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.05)
+    noise.connect(filter)
+    filter.connect(gain)
+    gain.connect(this.engine.master)
+    noise.start(time, Math.random() * 0.4)
+    noise.stop(time + 0.06)
+  }
+
+  // Marimba pluck — triangle with a quick percussive decay
+  playMarimba(time, freq) {
+    const ctx = this.engine.ctx
+    const osc = ctx.createOscillator()
+    osc.type = 'triangle'
+    osc.frequency.value = freq
+    const gain = ctx.createGain()
+    gain.gain.setValueAtTime(0.0001, time)
+    gain.gain.exponentialRampToValueAtTime(this.cfg.drumGain * 0.4, time + 0.01)
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.25)
+    osc.connect(gain)
+    gain.connect(this.engine.master)
+    osc.start(time)
+    osc.stop(time + 0.3)
+  }
+
+  setAct(actIndex) {
+    this.layer = LAYERS[Math.min(actIndex, LAYERS.length - 1)] || LAYERS[0]
   }
 
   setDrumBpm(bpm) {

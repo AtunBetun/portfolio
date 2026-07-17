@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'bun:test'
-import { efficiency } from '../../sources/Game/Minigames/CayucoRace/logic/PaddleModel.js'
+import { efficiency, rampFactor } from '../../sources/Game/Minigames/CayucoRace/logic/PaddleModel.js'
 import { RACE_CONFIG } from '../../data/race-config.js'
 
 const ZONE = [88, 112]
 const CFG = RACE_CONFIG.rhythm
+const STROKE = RACE_CONFIG.stroke
 
 describe('efficiency', () => {
   it('is 1.0 across the whole zone plateau', () => {
@@ -35,6 +36,34 @@ describe('efficiency', () => {
     expect(efficiency(1, ZONE, CFG)).toBeGreaterThanOrEqual(CFG.floor)
   })
 
+})
+
+describe('rampFactor (blade grip over hold time)', () => {
+  it('ramps up linearly from 0 to full grip', () => {
+    expect(rampFactor(0, STROKE)).toBeCloseTo(0, 5)
+    const half = rampFactor(STROKE.rampTime / 2, STROKE)
+    expect(half).toBeGreaterThan(0)
+    expect(half).toBeLessThan(1)
+    expect(rampFactor(STROKE.rampTime, STROKE)).toBeCloseTo(1, 5)
+  })
+
+  it('holds full grip across the plateau', () => {
+    for (let t = STROKE.rampTime; t <= STROKE.stallStart; t += 0.05) {
+      expect(rampFactor(t, STROKE)).toBeCloseTo(1, 5)
+    }
+  })
+
+  it('stalls toward zero well past the stall point — holding forever never wins', () => {
+    expect(rampFactor(STROKE.stallStart, STROKE)).toBeCloseTo(1, 5)
+    expect(rampFactor(STROKE.stallStart + 0.6, STROKE)).toBeLessThan(0.1)
+    // Monotonically decreasing in the stall region
+    expect(rampFactor(STROKE.stallStart + 1.0, STROKE)).toBeLessThan(
+      rampFactor(STROKE.stallStart + 0.3, STROKE)
+    )
+  })
+})
+
+describe('efficiency (continued)', () => {
   describe('anti-mash invariant: bpm × efficiency peaks inside every act zone', () => {
     for (const act of RACE_CONFIG.acts) {
       it(`act "${act.id}" zone [${act.bpmZone}]`, () => {

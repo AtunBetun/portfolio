@@ -3,10 +3,10 @@ import { toon } from '../../Rendering/ToonMaterials.js'
 import { PALETTE } from '../../Rendering/Palette.js'
 import { RACE_CONFIG } from '../../../../data/race-config.js'
 
-const OCEAN_WIDTH = 70
-const OCEAN_LENGTH = 100
-const OCEAN_SEGMENTS_X = 40
-const OCEAN_SEGMENTS_Z = 56
+const OCEAN_WIDTH = 120
+const OCEAN_LENGTH = 300
+const OCEAN_SEGMENTS_X = 48
+const OCEAN_SEGMENTS_Z = 80
 const EVENT_WAVE_SPAWN_AHEAD = 40
 const EVENT_WAVE_DESPAWN_BEHIND = 15
 const FOAM_BLOBS_PER_WAVE = 5
