@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test'
-import { hashFloat } from '../../sources/Game/World/Rooms/HubRoom.js'
+import { hashFloat } from '../../sources/Game/World/Rooms/districts/Flora.js'
 
 describe('hashFloat', () => {
   it('returns values in [0, 1)', () => {
