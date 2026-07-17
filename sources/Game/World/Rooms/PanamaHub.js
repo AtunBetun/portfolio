@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { buildBridge } from './districts/Bridge.js'
-import { buildCareerBank, CHIMNEY_TOP, getFlagCloth } from './districts/CareerBank.js'
+import { buildCareerBank } from './districts/CareerBank.js'
 import { buildLandmark } from './districts/Landmark.js'
 import { buildFlora } from './districts/Flora.js'
 
@@ -11,7 +11,7 @@ export function buildPanamaHub(group, physics) {
   const grid = physics ? physics.heightGrid : null
 
   buildBridge(hub, physics, grid)
-  buildCareerBank(hub, physics, grid)
+  const career = buildCareerBank(hub, physics, grid)
   buildLandmark(hub, physics, grid)
 
   const flora = buildFlora(hub, physics, grid)
@@ -23,7 +23,7 @@ export function buildPanamaHub(group, physics) {
     bushes: flora.bushes,
     palmFronds: flora.palmFronds,
     sparkles: flora.sparkles,
-    flagCloth: getFlagCloth(),
-    chimneyTop: CHIMNEY_TOP
+    flagCloth: career.flagCloth,
+    chimneyTop: career.chimneyTop
   }
 }

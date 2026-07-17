@@ -4,22 +4,16 @@ import { PALETTE } from '../../../Rendering/Palette.js'
 import { CAREER_CONTENT } from '../../../../../data/content-map.js'
 import { sampleHeight } from '../../../../../data/terrain.js'
 
-export const CHIMNEY_TOP = new THREE.Vector3()
-
-let flagClothRef = null
-export function getFlagCloth() {
-  return flagClothRef
-}
-
 export function buildCareerBank(group, physics, grid) {
   const bank = new THREE.Group()
   bank.name = 'career-bank'
 
-  buildPG(bank, physics, grid)
+  const chimneyTop = buildPG(bank, physics, grid)
   buildBlackstone(bank, physics, grid)
-  buildAmazon(bank, physics, grid)
+  const flagCloth = buildAmazon(bank, physics, grid)
 
   group.add(bank)
+  return { chimneyTop, flagCloth }
 }
 
 function groundAt(grid, x, z) {
@@ -130,8 +124,6 @@ function buildPG(group, physics, grid) {
   chimney.castShadow = true
   group.add(chimney)
 
-  CHIMNEY_TOP.set(x + 0.7, y + h + 0.95, z + 0.4)
-
   addWindow(group, x + 0.92, y + 1.2, z, Math.PI / 2)
   addWindow(group, x + 0.92, y + 2.2, z, Math.PI / 2)
   addWindow(group, x + 0.92, y + 3.0, z, Math.PI / 2)
@@ -140,6 +132,8 @@ function buildPG(group, physics, grid) {
   addTrimBand(group, x, y + 0.35, z, 1.8, 1.8)
 
   addBoxCollider(physics, x, y + h / 2, z, 0.9, h / 2, 0.9)
+
+  return new THREE.Vector3(x + 0.7, y + h + 0.95, z + 0.4)
 }
 
 // Blackstone: squat wide slab, flat roof with parapet, settled 5° lean
@@ -211,11 +205,13 @@ function buildAmazon(group, physics, grid) {
   addAwning(group, x + 1.12, y + 1.65, z, Math.PI / 2, 'cascoTerracotta')
   addTrimBand(group, x, y + 0.35, z, 2.2, 2.2)
 
-  const flag = buildFlag()
+  const { flag, cloth } = buildFlag()
   flag.position.set(x, y + h + 1.4, z)
   group.add(flag)
 
   addBoxCollider(physics, x, y + h / 2, z, 1.1, h / 2, 1.1)
+
+  return cloth
 }
 
 function buildFlag() {
@@ -233,9 +229,8 @@ function buildFlag() {
   )
   cloth.position.set(0.18, 0.75, 0)
   flag.add(cloth)
-  flagClothRef = cloth
 
-  return flag
+  return { flag, cloth }
 }
 
 function taperTop(boxGeo, scale) {

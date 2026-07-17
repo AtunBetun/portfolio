@@ -64,7 +64,10 @@ export default class Critters {
       const nextT = t + 0.05
       const nx = ax + Math.sin(nextT) * b.rx
       const nz = az + Math.sin(2 * nextT) * b.rz
-      b.group.lookAt(nx, y, nz)
+      // path points are parent-local; lookAt wants world space
+      const target = new THREE.Vector3(nx, y, nz)
+      if (b.group.parent) b.group.parent.localToWorld(target)
+      b.group.lookAt(target)
 
       const flap = 0.5 + Math.sin(elapsed * 18 + b.phase) * 0.8
       b.leftWing.rotation.y = flap
