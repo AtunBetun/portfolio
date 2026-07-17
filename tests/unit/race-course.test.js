@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'bun:test'
 import { RACE_CONFIG } from '../../data/race-config.js'
+import ActTrack from '../../sources/Game/Minigames/CayucoRace/logic/ActTrack.js'
 
 class CourseProgress {
   constructor() {
@@ -13,38 +14,9 @@ class CourseProgress {
     if (this.progress >= 1.0) this.finished = true
   }
 
-  getPhase() {
-    if (this.progress < 0.33) return 0
-    if (this.progress < 0.67) return 1
-    return 2
-  }
-
   reset() {
     this.progress = 0
     this.finished = false
-  }
-}
-
-class WaveSpawner {
-  constructor(config = RACE_CONFIG.waves) {
-    this.progressMarks = config.progressMarks
-    this.nextMarkIndex = 0
-  }
-
-  update(progress) {
-    const spawned = []
-    while (
-      this.nextMarkIndex < this.progressMarks.length &&
-      progress >= this.progressMarks[this.nextMarkIndex]
-    ) {
-      spawned.push(this.progressMarks[this.nextMarkIndex])
-      this.nextMarkIndex++
-    }
-    return spawned
-  }
-
-  reset() {
-    this.nextMarkIndex = 0
   }
 }
 
@@ -93,98 +65,51 @@ describe('CourseProgress', () => {
     })
   })
 
-  describe('phases', () => {
-    it('is phase 0 (calm) at start', () => {
-      const course = new CourseProgress()
-      course.updateProgress(0)
-      expect(course.getPhase()).toBe(0)
+  describe('sea phases via acts', () => {
+    it('is calm sea (phase 0) at the start', () => {
+      const track = new ActTrack(RACE_CONFIG.acts)
+      expect(track.getActAt(0).seaPhase).toBe(0)
     })
 
-    it('is phase 1 (building) at mid-course', () => {
-      const course = new CourseProgress()
-      course.updateProgress(-RACE_CONFIG.courseLength * 0.5)
-      expect(course.getPhase()).toBe(1)
+    it('builds (phase 1) in the wave act', () => {
+      const track = new ActTrack(RACE_CONFIG.acts)
+      const waves = RACE_CONFIG.acts.find((a) => a.id === 'waves')
+      expect(track.getActAt((waves.start + waves.end) / 2).seaPhase).toBe(1)
     })
 
-    it('is phase 2 (rough) near the end', () => {
-      const course = new CourseProgress()
-      course.updateProgress(-RACE_CONFIG.courseLength * 0.9)
-      expect(course.getPhase()).toBe(2)
+    it('is rough (phase 2) at the finish', () => {
+      const track = new ActTrack(RACE_CONFIG.acts)
+      expect(track.getActAt(1).seaPhase).toBe(2)
     })
 
-    it('transitions from phase 0 to 1 at progress 0.33', () => {
-      const course = new CourseProgress()
-      course.updateProgress(-RACE_CONFIG.courseLength * 0.32)
-      expect(course.getPhase()).toBe(0)
-      course.updateProgress(-RACE_CONFIG.courseLength * 0.33)
-      expect(course.getPhase()).toBe(1)
-    })
-
-    it('transitions from phase 1 to 2 at progress 0.67', () => {
-      const course = new CourseProgress()
-      course.updateProgress(-RACE_CONFIG.courseLength * 0.66)
-      expect(course.getPhase()).toBe(1)
-      course.updateProgress(-RACE_CONFIG.courseLength * 0.67)
-      expect(course.getPhase()).toBe(2)
+    it('sea phases never regress along the course', () => {
+      const track = new ActTrack(RACE_CONFIG.acts)
+      let last = -1
+      for (let p = 0; p <= 1; p += 0.01) {
+        const phase = track.getActAt(p).seaPhase
+        expect(phase).toBeGreaterThanOrEqual(last)
+        last = phase
+      }
     })
   })
 
-  describe('wave spawning', () => {
-    it('spawns no waves before the first progress mark', () => {
-      const spawner = new WaveSpawner()
-      const firstMark = RACE_CONFIG.waves.progressMarks[0]
-      expect(spawner.update(firstMark - 0.01)).toEqual([])
-    })
-
-    it('spawns a wave exactly at each progress mark', () => {
-      const spawner = new WaveSpawner()
-      for (const mark of RACE_CONFIG.waves.progressMarks) {
-        expect(spawner.update(mark)).toEqual([mark])
+  describe('surf schedule', () => {
+    it('places all swells inside the wave act', () => {
+      const waves = RACE_CONFIG.acts.find((a) => a.id === 'waves')
+      for (const mark of waves.surf.schedule) {
+        expect(mark).toBeGreaterThanOrEqual(waves.start)
+        expect(mark).toBeLessThan(waves.end)
       }
     })
 
-    it('spawns each wave only once', () => {
-      const spawner = new WaveSpawner()
-      const firstMark = RACE_CONFIG.waves.progressMarks[0]
-      expect(spawner.update(firstMark)).toEqual([firstMark])
-      expect(spawner.update(firstMark)).toEqual([])
-    })
-
-    it('spawns all remaining waves when progress jumps past several marks', () => {
-      const spawner = new WaveSpawner()
-      expect(spawner.update(1)).toEqual(RACE_CONFIG.waves.progressMarks)
-      expect(spawner.update(1)).toEqual([])
-    })
-
-    it('spawns waves again after reset', () => {
-      const spawner = new WaveSpawner()
-      spawner.update(1)
-      spawner.reset()
-      expect(spawner.update(1)).toEqual(RACE_CONFIG.waves.progressMarks)
-    })
-  })
-
-  describe('phase thresholds', () => {
-    it('returns phase 0 just below 0.33, phase 1 at 0.33', () => {
-      const course = new CourseProgress()
-      course.updateProgress(-RACE_CONFIG.courseLength * 0.329)
-      expect(course.getPhase()).toBe(0)
-      course.updateProgress(-RACE_CONFIG.courseLength * 0.33)
-      expect(course.getPhase()).toBe(1)
-    })
-
-    it('returns phase 1 just below 0.67, phase 2 at 0.67', () => {
-      const course = new CourseProgress()
-      course.updateProgress(-RACE_CONFIG.courseLength * 0.669)
-      expect(course.getPhase()).toBe(1)
-      course.updateProgress(-RACE_CONFIG.courseLength * 0.67)
-      expect(course.getPhase()).toBe(2)
-    })
-
-    it('returns phase 2 at the finish', () => {
-      const course = new CourseProgress()
-      course.updateProgress(-RACE_CONFIG.courseLength)
-      expect(course.getPhase()).toBe(2)
+    it('spaces swells far enough apart to resolve each one', () => {
+      const waves = RACE_CONFIG.acts.find((a) => a.id === 'waves')
+      const schedule = waves.surf.schedule
+      // A swell needs catch + surf time before the next one spawns;
+      // ~0.05 progress at cruise speeds is roughly 5-6 seconds
+      for (let i = 1; i < schedule.length; i++) {
+        expect(schedule[i] - schedule[i - 1]).toBeGreaterThanOrEqual(0.05)
+      }
     })
   })
 
@@ -205,10 +130,6 @@ describe('CourseProgress', () => {
       const goldSpeed = RACE_CONFIG.courseLength / RACE_CONFIG.medals.gold
       expect(goldSpeed).toBeLessThan(RACE_CONFIG.maxSpeed)
       expect(goldSpeed).toBeGreaterThan(0)
-      const course = new CourseProgress()
-      course.updateProgress(-RACE_CONFIG.courseLength)
-      expect(course.progress).toBe(1)
-      expect(course.finished).toBe(true)
     })
   })
 })

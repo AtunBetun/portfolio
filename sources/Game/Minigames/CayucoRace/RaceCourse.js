@@ -85,12 +85,6 @@ export default class RaceCourse {
     return this.finished
   }
 
-  getPhase() {
-    if (this.progress < 0.33) return 0
-    if (this.progress < 0.67) return 1
-    return 2
-  }
-
   getCourseDirection(progress) {
     return this.path.getTangent(THREE.MathUtils.clamp(progress, 0, 1)).normalize()
   }

@@ -6,12 +6,19 @@ const toHex = (color) => `#${color.toString(16).padStart(6, '0')}`
 const ACCENT = toHex(PALETTE.accent)
 const STONE = toHex(PALETTE.stone)
 const OCEAN_DEEP = toHex(PALETTE.oceanDeep)
+const FATIGUE_RED = '#e74c3c'
 
 const MEDAL_COLORS = {
   gold: '#ffd700',
   silver: '#c0c0c0',
   bronze: '#cd7f32'
 }
+
+// Fixed BPM scale for the tempo meter — the zone band slides within it,
+// which is what teaches the player each act's new pace
+const BPM_MIN = 40
+const BPM_MAX = 180
+const BPM_RANGE = BPM_MAX - BPM_MIN
 
 const STYLE_ID = 'race-hud-style'
 
@@ -24,27 +31,36 @@ function injectStyles() {
   from { transform: translate(-50%, -50%) scale(2); opacity: 0 }
   to { transform: translate(-50%, -50%) scale(1); opacity: 1 }
 }
-@keyframes race-combo-pop {
-  from { transform: translateX(-50%) scale(1.6) }
-  to { transform: translateX(-50%) scale(1) }
-}
-@keyframes race-combo-break {
-  from { transform: translateX(-50%) scale(1); opacity: 1 }
-  to { transform: translateX(-50%) scale(1.3); opacity: 0 }
-}
 @keyframes race-banner-show {
   0% { opacity: 0 }
   15% { opacity: 1 }
   70% { opacity: 1 }
   100% { opacity: 0 }
 }
-@keyframes race-rhythm-pulse {
-  0% { transform: scale(1) }
-  50% { transform: scale(1.3) }
-  100% { transform: scale(1) }
+@keyframes race-telegraph-pulse {
+  0% { transform: translateX(-50%) scale(1); opacity: 0.85 }
+  50% { transform: translateX(-50%) scale(1.06); opacity: 1 }
+  100% { transform: translateX(-50%) scale(1); opacity: 0.85 }
 }
-.race-flow-glow {
-  box-shadow: 0 0 8px 2px ${ACCENT}, 0 0 16px 4px rgba(255, 215, 0, 0.5);
+@keyframes race-stamina-pulse {
+  0% { opacity: 1 }
+  50% { opacity: 0.5 }
+  100% { opacity: 1 }
+}
+.race-tempo-inzone {
+  color: ${ACCENT} !important;
+  text-shadow: 0 0 10px ${ACCENT}, 0 2px 4px rgba(0, 0, 0, 0.7) !important;
+}
+.race-needle-inzone {
+  background: ${ACCENT} !important;
+  box-shadow: 0 0 8px 2px ${ACCENT};
+}
+.race-needle-fatigued {
+  background: ${FATIGUE_RED} !important;
+  box-shadow: 0 0 8px 2px ${FATIGUE_RED};
+}
+.race-stamina-fatigued {
+  animation: race-stamina-pulse 0.5s ease infinite;
 }
 .race-speedlines {
   background: repeating-linear-gradient(
@@ -57,18 +73,6 @@ function injectStyles() {
   -webkit-mask-image: radial-gradient(ellipse at center, transparent 35%, black 85%);
   mask-image: radial-gradient(ellipse at center, transparent 35%, black 85%);
 }
-.race-rhythm-icon {
-  width: 8px;
-  height: 24px;
-  border-radius: 4px 4px 2px 2px;
-  background: #ffffff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
-  animation: race-rhythm-pulse 0.35s ease infinite alternate;
-}
-.race-rhythm-icon.in-flow {
-  background: ${ACCENT};
-  box-shadow: 0 0 8px 2px ${ACCENT};
-}
 `
   document.head.appendChild(styleEl)
 }
@@ -77,7 +81,7 @@ export default class RaceHUD {
   constructor() {
     this.onRetry = null
     this.onExit = null
-    this.comboBreakTimeout = null
+    this.onMuteToggle = null
 
     injectStyles()
 
@@ -94,11 +98,13 @@ export default class RaceHUD {
     this.buildOverlays()
     this.buildProgress()
     this.buildTimer()
-    this.buildCombo()
+    this.buildTempoMeter()
+    this.buildStamina()
     this.buildBanner()
+    this.buildTelegraph()
     this.buildCountdown()
     this.buildControls()
-    this.buildRhythmIcons()
+    this.buildMuteButton()
     this.buildResults()
 
     document.body.appendChild(this.container)
@@ -153,23 +159,11 @@ export default class RaceHUD {
     })
     this.progressTrack.appendChild(this.progressBar)
     this.container.appendChild(this.progressTrack)
-
-    this.flowBar = document.createElement('div')
-    Object.assign(this.flowBar.style, {
-      position: 'absolute',
-      top: '4px',
-      left: '0',
-      width: '0%',
-      height: '3px',
-      background: ACCENT,
-      opacity: '0',
-      transition: 'width 0.1s linear, opacity 0.2s ease'
-    })
-    this.container.appendChild(this.flowBar)
   }
 
   buildTimer() {
     this.timerEl = document.createElement('div')
+    this.timerEl.setAttribute('data-race-timer', '')
     Object.assign(this.timerEl.style, {
       position: 'absolute',
       top: '16px',
@@ -183,39 +177,155 @@ export default class RaceHUD {
     this.container.appendChild(this.timerEl)
   }
 
-  buildCombo() {
-    this.comboEl = document.createElement('div')
-    Object.assign(this.comboEl.style, {
+  buildTempoMeter() {
+    const wrap = document.createElement('div')
+    Object.assign(wrap.style, {
       position: 'absolute',
-      top: '18%',
-      left: '50%',
-      transform: 'translateX(-50%)',
-      fontSize: '36px',
+      top: '52px',
+      right: '24px',
+      width: '220px',
+      textAlign: 'right'
+    })
+
+    this.bpmReadout = document.createElement('div')
+    this.bpmReadout.setAttribute('data-race-bpm', '')
+    Object.assign(this.bpmReadout.style, {
+      fontFamily: 'monospace',
+      fontSize: '18px',
       fontWeight: 'bold',
       color: '#ffffff',
-      textShadow: `0 0 12px ${ACCENT}, 0 2px 4px rgba(0, 0, 0, 0.6)`,
-      display: 'none'
+      textShadow: '0 2px 4px rgba(0, 0, 0, 0.7)',
+      marginBottom: '4px',
+      transition: 'color 0.2s ease'
     })
-    this.container.appendChild(this.comboEl)
+    this.bpmReadout.textContent = '— BPM'
+    wrap.appendChild(this.bpmReadout)
+
+    this.tempoTrack = document.createElement('div')
+    Object.assign(this.tempoTrack.style, {
+      position: 'relative',
+      width: '220px',
+      height: '14px',
+      borderRadius: '7px',
+      background: 'rgba(0, 0, 0, 0.45)',
+      overflow: 'hidden'
+    })
+
+    // Zone band — slides/resizes on act change to announce the new pace
+    this.zoneBand = document.createElement('div')
+    Object.assign(this.zoneBand.style, {
+      position: 'absolute',
+      top: '0',
+      height: '100%',
+      background: ACCENT,
+      opacity: '0.35',
+      transition: 'left 0.8s ease, width 0.8s ease'
+    })
+    this.tempoTrack.appendChild(this.zoneBand)
+
+    // Needle — the player's current BPM
+    this.needle = document.createElement('div')
+    Object.assign(this.needle.style, {
+      position: 'absolute',
+      top: '0',
+      width: '3px',
+      height: '100%',
+      background: '#ffffff',
+      left: '0%',
+      transition: 'left 0.12s linear'
+    })
+    this.tempoTrack.appendChild(this.needle)
+
+    wrap.appendChild(this.tempoTrack)
+    this.container.appendChild(wrap)
+    this.tempoWrap = wrap
+  }
+
+  buildStamina() {
+    const wrap = document.createElement('div')
+    Object.assign(wrap.style, {
+      position: 'absolute',
+      top: '96px',
+      right: '24px',
+      width: '220px'
+    })
+
+    this.staminaTrack = document.createElement('div')
+    this.staminaTrack.setAttribute('data-race-stamina', '')
+    Object.assign(this.staminaTrack.style, {
+      width: '220px',
+      height: '8px',
+      borderRadius: '4px',
+      background: 'rgba(0, 0, 0, 0.45)',
+      overflow: 'hidden'
+    })
+
+    this.staminaBar = document.createElement('div')
+    Object.assign(this.staminaBar.style, {
+      width: '100%',
+      height: '100%',
+      background: ACCENT,
+      transition: 'width 0.15s linear, background 0.3s ease'
+    })
+    this.staminaTrack.appendChild(this.staminaBar)
+    wrap.appendChild(this.staminaTrack)
+    this.container.appendChild(wrap)
   }
 
   buildBanner() {
     this.bannerEl = document.createElement('div')
     Object.assign(this.bannerEl.style, {
       position: 'absolute',
-      top: '38%',
+      top: '34%',
       left: '0',
       width: '100%',
       textAlign: 'center',
+      opacity: '0',
+      pointerEvents: 'none'
+    })
+
+    this.bannerTitle = document.createElement('div')
+    Object.assign(this.bannerTitle.style, {
       fontSize: '48px',
       fontWeight: 'bold',
       fontStyle: 'italic',
       textTransform: 'uppercase',
       color: '#ffffff',
-      textShadow: '0 4px 12px rgba(0, 0, 0, 0.8)',
-      opacity: '0'
+      textShadow: '0 4px 12px rgba(0, 0, 0, 0.8)'
     })
+    this.bannerEl.appendChild(this.bannerTitle)
+
+    this.bannerHint = document.createElement('div')
+    Object.assign(this.bannerHint.style, {
+      fontSize: '18px',
+      marginTop: '6px',
+      color: '#ffffff',
+      opacity: '0.9',
+      textShadow: '0 2px 6px rgba(0, 0, 0, 0.8)'
+    })
+    this.bannerEl.appendChild(this.bannerHint)
+
     this.container.appendChild(this.bannerEl)
+  }
+
+  buildTelegraph() {
+    this.telegraphEl = document.createElement('div')
+    this.telegraphEl.setAttribute('data-race-telegraph', '')
+    Object.assign(this.telegraphEl.style, {
+      position: 'absolute',
+      bottom: '25%',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      fontSize: '26px',
+      fontWeight: 'bold',
+      fontStyle: 'italic',
+      textTransform: 'uppercase',
+      color: '#ffffff',
+      textShadow: `0 0 14px ${ACCENT}, 0 2px 6px rgba(0, 0, 0, 0.8)`,
+      whiteSpace: 'nowrap',
+      display: 'none'
+    })
+    this.container.appendChild(this.telegraphEl)
   }
 
   buildCountdown() {
@@ -238,7 +348,7 @@ export default class RaceHUD {
     this.controlsEl = document.createElement('div')
     Object.assign(this.controlsEl.style, {
       position: 'absolute',
-      bottom: '72px',
+      bottom: '48px',
       left: '50%',
       transform: 'translateX(-50%)',
       fontSize: '14px',
@@ -248,7 +358,7 @@ export default class RaceHUD {
       whiteSpace: 'nowrap',
       transition: 'opacity 0.6s ease'
     })
-    this.controlsEl.textContent = 'A = left paddle  •  D = right paddle  •  Match the beat!'
+    this.controlsEl.textContent = 'A / D alternate strokes  •  Match the drum'
     this.container.appendChild(this.controlsEl)
   }
 
@@ -258,30 +368,36 @@ export default class RaceHUD {
     }
   }
 
-  buildRhythmIcons() {
-    const row = document.createElement('div')
-    Object.assign(row.style, {
+  buildMuteButton() {
+    this.muteBtn = document.createElement('button')
+    Object.assign(this.muteBtn.style, {
       position: 'absolute',
-      bottom: '32px',
-      left: '50%',
-      transform: 'translateX(-50%)',
-      display: 'flex',
-      gap: '24px'
+      top: '14px',
+      left: '16px',
+      width: '36px',
+      height: '36px',
+      borderRadius: '8px',
+      border: 'none',
+      background: 'rgba(0, 0, 0, 0.4)',
+      color: '#ffffff',
+      fontSize: '18px',
+      cursor: 'pointer',
+      pointerEvents: 'auto'
     })
+    this.muteBtn.textContent = '🔊'
+    this.muteBtn.addEventListener('click', (event) => {
+      event.stopPropagation()
+      if (this.onMuteToggle) {
+        this.onMuteToggle()
+      }
+    })
+    this.container.appendChild(this.muteBtn)
+  }
 
-    this.rhythmIcons = {}
-    for (const side of ['left', 'right']) {
-      const wrapper = document.createElement('div')
-      wrapper.style.transform = `rotate(${side === 'left' ? -15 : 15}deg)`
-      const icon = document.createElement('div')
-      icon.className = 'race-rhythm-icon'
-      icon.style.opacity = '0.6'
-      wrapper.appendChild(icon)
-      row.appendChild(wrapper)
-      this.rhythmIcons[side] = icon
+  setMuted(muted) {
+    if (this.muteBtn) {
+      this.muteBtn.textContent = muted ? '🔇' : '🔊'
     }
-    this.container.appendChild(row)
-    this.rhythmRow = row
   }
 
   buildResults() {
@@ -317,57 +433,52 @@ export default class RaceHUD {
     this.progressBar.style.width = progress * 100 + '%'
   }
 
-  updateFlow(flow) {
-    this.flowBar.style.width = flow * 100 + '%'
-    this.flowBar.style.opacity = String(0.3 + flow * 0.7)
-    this.flowBar.classList.toggle('race-flow-glow', flow >= 0.7)
-
-    const inFlow = flow >= 0.7
-    for (const side of ['left', 'right']) {
-      this.rhythmIcons[side].classList.toggle('in-flow', inFlow)
-    }
+  bpmToPercent(bpm) {
+    const t = (bpm - BPM_MIN) / BPM_RANGE
+    return Math.min(Math.max(t, 0), 1) * 100
   }
 
-  showCombo(combo) {
-    if (this.comboBreakTimeout) {
-      clearTimeout(this.comboBreakTimeout)
-      this.comboBreakTimeout = null
-    }
-    if (combo === 0) {
-      this.comboEl.style.display = 'none'
-      return
-    }
-    this.comboEl.textContent = `×${combo}`
-    this.comboEl.style.display = 'block'
-    this.comboEl.style.opacity = '1'
-    this.comboEl.style.animation = 'none'
-    // Force reflow so the pop animation restarts on each combo bump
-    void this.comboEl.offsetWidth
-    this.comboEl.style.animation = 'race-combo-pop 0.2s ease-out'
+  updateTempo(bpm, zone, inZone, fatigued = false) {
+    this.bpmReadout.textContent = bpm > 0 ? `${Math.round(bpm)} BPM` : '— BPM'
+    this.bpmReadout.classList.toggle('race-tempo-inzone', inZone)
+
+    this.needle.style.left = `calc(${this.bpmToPercent(bpm)}% - 1.5px)`
+    this.needle.classList.toggle('race-needle-inzone', inZone && !fatigued)
+    this.needle.classList.toggle('race-needle-fatigued', fatigued)
+
+    this.moveTempoZone(zone)
   }
 
-  // Alias kept for callers using the older name
-  popCombo(combo) {
-    this.showCombo(combo)
+  moveTempoZone([lo, hi]) {
+    const left = this.bpmToPercent(lo)
+    const width = this.bpmToPercent(hi) - left
+    this.zoneBand.style.left = left + '%'
+    this.zoneBand.style.width = width + '%'
   }
 
-  breakCombo() {
-    if (this.comboEl.style.display === 'none') return
-    this.comboEl.style.animation = 'none'
-    void this.comboEl.offsetWidth
-    this.comboEl.style.animation = 'race-combo-break 0.3s ease-in forwards'
-    this.comboBreakTimeout = setTimeout(() => {
-      this.comboEl.style.display = 'none'
-      this.comboEl.style.animation = 'none'
-      this.comboBreakTimeout = null
-    }, 300)
+  updateStamina(value, fatigued) {
+    this.staminaBar.style.width = value * 100 + '%'
+    this.staminaBar.style.background = fatigued || value < 0.3 ? FATIGUE_RED : ACCENT
+    this.staminaBar.classList.toggle('race-stamina-fatigued', fatigued)
   }
 
-  showPhaseBanner(text) {
-    this.bannerEl.textContent = text
+  showActBanner(name, hint) {
+    this.bannerTitle.textContent = name
+    this.bannerHint.textContent = hint || ''
     this.bannerEl.style.animation = 'none'
     void this.bannerEl.offsetWidth
-    this.bannerEl.style.animation = 'race-banner-show 1.5s ease forwards'
+    this.bannerEl.style.animation = 'race-banner-show 2.2s ease forwards'
+  }
+
+  showTelegraph(state) {
+    this.telegraphEl.textContent = state === 'surfing' ? 'RIDE IT!' : 'SWELL INCOMING — SURGE!'
+    this.telegraphEl.style.display = 'block'
+    this.telegraphEl.style.animation =
+      state === 'surfing' ? 'none' : 'race-telegraph-pulse 0.6s ease infinite'
+  }
+
+  hideTelegraph() {
+    this.telegraphEl.style.display = 'none'
   }
 
   showCountdown(number) {
@@ -405,20 +516,6 @@ export default class RaceHUD {
     void this.vignetteEl.offsetWidth
     this.vignetteEl.style.transition = 'opacity 500ms ease-out'
     this.vignetteEl.style.opacity = '0'
-  }
-
-  // Alias kept for callers using the older name
-  showVignette() {
-    this.flashBad()
-  }
-
-  pulseRhythm(side) {
-    const icon = this.rhythmIcons[side]
-    if (!icon) return
-    icon.style.animation = 'none'
-    void icon.offsetWidth
-    icon.style.animation = 'race-rhythm-pulse 0.2s ease-out'
-    icon.style.opacity = '1'
   }
 
   showResults(time, medal) {
@@ -501,10 +598,6 @@ export default class RaceHUD {
   }
 
   dispose() {
-    if (this.comboBreakTimeout) {
-      clearTimeout(this.comboBreakTimeout)
-      this.comboBreakTimeout = null
-    }
     this.container.remove()
     const styleEl = document.getElementById(STYLE_ID)
     if (styleEl) styleEl.remove()

@@ -235,12 +235,13 @@ export default class Boat {
     // Paddler idle animation — gentle lean
     for (const p of this.paddlers) {
       if (p.phase > 0) {
-        // Active stroke animation
+        // Active stroke animation — fatigued strokes are shallow and floppy
         p.phase = Math.max(0, p.phase - delta / STROKE_ANIM_DURATION)
+        const amp = p.weak ? 0.45 : 0.9
         const swing = Math.sin(p.phase * Math.PI)
         const sign = p.activeSide === 'left' ? -1 : 1
-        p.pivot.rotation.z = sign * swing * 0.9
-        p.pivot.rotation.x = swing * 0.5
+        p.pivot.rotation.z = sign * swing * amp
+        p.pivot.rotation.x = swing * (p.weak ? 0.25 : 0.5)
       } else {
         // Idle sway
         const sway = Math.sin(this.elapsed * 1.8 + p.idlePhase) * 0.05
@@ -260,9 +261,16 @@ export default class Boat {
       }
     }
 
-    // Bow spray at high speed
-    if (this.speed > SPRAY_SPEED_THRESHOLD && Math.random() < 0.3) {
+    // Bow spray at high speed — constant while surfing
+    if (this.surfing && Math.random() < 0.8) {
       this.spawnBowSpray(fwdX, fwdZ)
+    } else if (this.speed > SPRAY_SPEED_THRESHOLD && Math.random() < 0.3) {
+      this.spawnBowSpray(fwdX, fwdZ)
+    }
+
+    // Surfing bias — nose dips down the wave face
+    if (this.surfing) {
+      this.currentPitch += (-0.06 - this.currentPitch) * PITCH_LERP * 0.5
     }
 
     // Update particles
@@ -271,7 +279,7 @@ export default class Boat {
     this.updatePool(this.sprayPool, delta)
   }
 
-  paddle(side) {
+  paddle(side, { weak = false } = {}) {
     // ALL paddlers stroke together on the called side.
     // Move the paddle pivot to the correct screen-side:
     // heading PI means positive local X = screen-left.
@@ -279,14 +287,21 @@ export default class Boat {
     for (const p of this.paddlers) {
       p.phase = 1
       p.activeSide = side
+      p.weak = weak
       p.pivot.position.x = pivotX
     }
 
     // Left paddles in water → boat turns right, and vice versa.
     // With heading PI (facing -Z), decreasing heading veers screen-right.
     this.heading += side === 'left' ? -HEADING_NUDGE : HEADING_NUDGE
-    this.spawnSplash(side)
+
+    // Fatigued form reads as splashy, ineffective strokes
+    this.spawnSplash(side, weak ? 8 : 5, weak)
     return true
+  }
+
+  setSurfing(surfing) {
+    this.surfing = surfing
   }
 
   applyDrift(amount, delta) {
@@ -310,11 +325,15 @@ export default class Boat {
     this.targetRoll = 0
     this.elapsed = 0
     this.wakeTimer = 0
+    this.surfing = false
 
     this.mesh.position.set(0, 0, 0)
     this.mesh.rotation.set(0, 0, 0)
 
-    for (const p of this.paddlers) p.phase = 0
+    for (const p of this.paddlers) {
+      p.phase = 0
+      p.weak = false
+    }
     this.clearPool(this.splashPool)
     this.clearPool(this.wakePool)
     this.clearPool(this.sprayPool)
@@ -326,10 +345,14 @@ export default class Boat {
 
   // --- Particle helpers ---
 
-  spawnSplash(side, count = 5) {
+  spawnSplash(side, count = 5, weak = false) {
     const sign = side === 'left' ? -1 : 1
     const rightX = Math.cos(this.heading)
     const rightZ = -Math.sin(this.heading)
+
+    // Weak strokes throw more water, lower and wider — all splash, no power
+    const outSpeed = weak ? 0.8 : 1.5
+    const upSpeed = weak ? 1.2 : 2
 
     for (let i = 0; i < count; i++) {
       const p = this.getInactive(this.splashPool)
@@ -352,9 +375,9 @@ export default class Boat {
       )
 
       p.velocity.set(
-        rightX * sign * (1.5 + Math.random()) + (Math.random() - 0.5) * 0.5,
-        2 + Math.random() * 1.5,
-        rightZ * sign * (1.5 + Math.random()) + (Math.random() - 0.5) * 0.5
+        rightX * sign * (outSpeed + Math.random()) + (Math.random() - 0.5) * (weak ? 1.5 : 0.5),
+        upSpeed + Math.random() * 1.5,
+        rightZ * sign * (outSpeed + Math.random()) + (Math.random() - 0.5) * (weak ? 1.5 : 0.5)
       )
     }
   }

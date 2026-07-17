@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'bun:test'
 import { RACE_CONFIG } from '../../data/race-config.js'
+import { validateActs } from '../../sources/Game/Minigames/CayucoRace/logic/ActTrack.js'
 
 describe('RACE_CONFIG', () => {
   it('exports all required top-level keys', () => {
@@ -10,9 +11,12 @@ describe('RACE_CONFIG', () => {
       'paddleCooldown',
       'inputBuffer',
       'maxSpeed',
-      'flow',
+      'rhythm',
+      'stamina',
+      'surf',
+      'audio',
+      'acts',
       'waves',
-      'timingWindow',
       'medals',
       'drift',
       'phases',
@@ -29,44 +33,86 @@ describe('RACE_CONFIG', () => {
     expect(silver).toBeLessThan(bronze)
   })
 
-  it('has positive timing windows with perfect < good', () => {
-    const { perfect, good } = RACE_CONFIG.timingWindow
-    expect(perfect).toBeGreaterThan(0)
-    expect(good).toBeGreaterThan(0)
-    expect(perfect).toBeLessThan(good)
-  })
-
-  describe('flow', () => {
-    it('has a valid cadence band', () => {
-      const [min, max] = RACE_CONFIG.flow.band
-      expect(min).toBeGreaterThan(0)
-      expect(max).toBeGreaterThan(min)
+  describe('rhythm', () => {
+    it('has sane tracker parameters', () => {
+      const { windowSize, smoothing, maxInterval, minInterval, graceStrokes } = RACE_CONFIG.rhythm
+      expect(windowSize).toBeGreaterThan(0)
+      expect(smoothing).toBeGreaterThan(0)
+      expect(smoothing).toBeLessThanOrEqual(1)
+      expect(minInterval).toBeGreaterThan(0)
+      expect(maxInterval).toBeGreaterThan(minInterval)
+      expect(graceStrokes).toBeGreaterThanOrEqual(0)
     })
 
-    it('has positive gain, loss, and maxBonus', () => {
-      const { gain, loss, maxBonus } = RACE_CONFIG.flow
-      expect(gain).toBeGreaterThan(0)
-      expect(loss).toBeGreaterThan(0)
-      expect(maxBonus).toBeGreaterThan(0)
+    it('has an efficiency floor in (0, 1)', () => {
+      expect(RACE_CONFIG.rhythm.floor).toBeGreaterThan(0)
+      expect(RACE_CONFIG.rhythm.floor).toBeLessThan(1)
+    })
+  })
+
+  describe('stamina', () => {
+    it('has positive rates and hysteresis enter < exit', () => {
+      const s = RACE_CONFIG.stamina
+      expect(s.drainPerSecond).toBeGreaterThan(0)
+      expect(s.recoverPerSecond).toBeGreaterThan(0)
+      expect(s.restRecoverPerSecond).toBeGreaterThan(s.recoverPerSecond)
+      expect(s.fatigueEnter).toBeLessThan(s.fatigueExit)
+      expect(s.minStrokeFactor).toBeGreaterThan(0)
+      expect(s.minStrokeFactor).toBeLessThan(1)
+    })
+  })
+
+  describe('surf', () => {
+    it('has a catchable window and surf speed above maxSpeed', () => {
+      const { catchHalfWidth, telegraphDistance, surfSpeed, surfDuration } = RACE_CONFIG.surf
+      expect(catchHalfWidth).toBeGreaterThan(0)
+      expect(telegraphDistance).toBeGreaterThan(catchHalfWidth)
+      expect(surfSpeed).toBeGreaterThanOrEqual(RACE_CONFIG.maxSpeed)
+      expect(surfDuration).toBeGreaterThan(0)
+    })
+  })
+
+  describe('acts', () => {
+    it('passes validateActs (contiguous 0→1 coverage, sane zones)', () => {
+      expect(validateActs(RACE_CONFIG.acts)).toBe(true)
+    })
+
+    it('keeps every bpm zone inside the HUD meter scale [40, 180]', () => {
+      for (const act of RACE_CONFIG.acts) {
+        expect(act.bpmZone[0]).toBeGreaterThanOrEqual(40)
+        expect(act.bpmZone[1]).toBeLessThanOrEqual(180)
+        if (act.surf) {
+          expect(act.surf.surgeZone[0]).toBeGreaterThanOrEqual(40)
+          expect(act.surf.surgeZone[1]).toBeLessThanOrEqual(180)
+        }
+      }
+    })
+
+    it('gives every act a name, hint, drum tempo, and sea phase', () => {
+      for (const act of RACE_CONFIG.acts) {
+        expect(typeof act.name).toBe('string')
+        expect(typeof act.hint).toBe('string')
+        expect(act.drumBpm).toBeGreaterThan(0)
+        expect(act.seaPhase).toBeGreaterThanOrEqual(0)
+        expect(act.seaPhase).toBeLessThan(RACE_CONFIG.phases.length)
+        expect(act.impulseMult).toBeGreaterThan(0)
+        expect(act.dragMult).toBeGreaterThan(0)
+      }
+    })
+
+    it('sets the drum tempo inside each act zone', () => {
+      for (const act of RACE_CONFIG.acts) {
+        expect(act.drumBpm).toBeGreaterThanOrEqual(act.bpmZone[0])
+        expect(act.drumBpm).toBeLessThanOrEqual(act.bpmZone[1])
+      }
     })
   })
 
   describe('waves', () => {
-    it('has progressMarks sorted ascending and within (0, 1)', () => {
-      const marks = RACE_CONFIG.waves.progressMarks
-      expect(marks.length).toBeGreaterThan(0)
-      for (let i = 0; i < marks.length; i++) {
-        expect(marks[i]).toBeGreaterThan(0)
-        expect(marks[i]).toBeLessThan(1)
-        if (i > 0) expect(marks[i]).toBeGreaterThan(marks[i - 1])
-      }
-    })
-
-    it('has positive sigma, speed, and triggerDistance', () => {
-      const { sigma, speed, triggerDistance } = RACE_CONFIG.waves
+    it('has positive sigma and speed', () => {
+      const { sigma, speed } = RACE_CONFIG.waves
       expect(sigma).toBeGreaterThan(0)
       expect(speed).toBeGreaterThan(0)
-      expect(triggerDistance).toBeGreaterThan(0)
     })
   })
 
@@ -112,14 +158,20 @@ describe('RACE_CONFIG', () => {
       expect(Array.isArray(RACE_CONFIG.camera.phaseOffsets)).toBe(true)
       expect(RACE_CONFIG.camera.phaseOffsets.length).toBe(3)
     })
+
+    it('has surf kick and lift', () => {
+      expect(RACE_CONFIG.camera.surfKick).toBeGreaterThan(0)
+      expect(RACE_CONFIG.camera.surfLift).toBeGreaterThan(0)
+    })
   })
 
   describe('drag equilibrium sanity', () => {
-    it('reaches meaningful speed at moderate cadence', () => {
+    it('reaches meaningful speed at cruise cadence', () => {
       const { strokeImpulse, dragHalfLife } = RACE_CONFIG
-      const strokesPerSecond = 3
-      const dragRate = Math.LN2 / dragHalfLife
-      const equilibriumSpeed = (strokeImpulse * strokesPerSecond) / dragRate
+      const cruise = RACE_CONFIG.acts.find((a) => a.id === 'cruise')
+      const strokesPerSecond = cruise.drumBpm / 60
+      const dragRate = Math.LN2 / (dragHalfLife * cruise.dragMult)
+      const equilibriumSpeed = (strokeImpulse * cruise.impulseMult * strokesPerSecond) / dragRate
       expect(equilibriumSpeed).toBeGreaterThan(5)
     })
 

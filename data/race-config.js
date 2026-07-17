@@ -1,44 +1,131 @@
 export const RACE_CONFIG = {
-  courseLength: 700,
+  courseLength: 1080,
   strokeImpulse: 2.0,
   dragHalfLife: 2.2,
   paddleCooldown: 0.18,
   inputBuffer: 0.08,
   maxSpeed: 14,
 
-  flow: {
-    band: [0.2, 0.5],
-    gain: 0.15,
-    loss: 0.2,
-    maxBonus: 0.25
+  // Tempo-matching core — the player's rolling stroke BPM against each act's zone
+  rhythm: {
+    windowSize: 4,
+    smoothing: 0.35,
+    maxInterval: 1.6,
+    minInterval: 0.15,
+    graceStrokes: 3,
+    falloffLow: 25,
+    falloffHigh: 16,
+    floor: 0.35
   },
+
+  stamina: {
+    drainPerSecond: 0.12,
+    overshootRef: 30,
+    sameSideHit: 0.05,
+    recoverPerSecond: 0.1,
+    restRecoverPerSecond: 0.18,
+    fatigueEnter: 0.25,
+    fatigueExit: 0.45,
+    minStrokeFactor: 0.45
+  },
+
+  surf: {
+    telegraphDistance: 30,
+    catchHalfWidth: 3.0,
+    surfSpeed: 18,
+    surfMaxSpeed: 18,
+    surfDuration: 4.0,
+    damp: 8
+  },
+
+  audio: {
+    drumGain: 0.25,
+    lookahead: 0.12,
+    schedulerInterval: 0.025
+  },
+
+  // Five authored acts — contiguous progress ranges, each with its own tempo zone
+  acts: [
+    {
+      id: 'launch',
+      name: 'LAUNCH SPRINT',
+      hint: 'Dig in — fast strokes!',
+      start: 0.0,
+      end: 0.15,
+      bpmZone: [125, 155],
+      seaPhase: 0,
+      impulseMult: 1.0,
+      dragMult: 1.0,
+      drumBpm: 140
+    },
+    {
+      id: 'cruise',
+      name: 'OPEN WATER',
+      hint: 'Settle into an easy rhythm',
+      start: 0.15,
+      end: 0.4,
+      bpmZone: [88, 112],
+      seaPhase: 0,
+      impulseMult: 1.15,
+      dragMult: 1.0,
+      drumBpm: 100
+    },
+    {
+      id: 'waves',
+      name: 'THE SWELLS',
+      hint: 'Surge to catch the waves!',
+      start: 0.4,
+      end: 0.65,
+      bpmZone: [78, 102],
+      seaPhase: 1,
+      impulseMult: 1.1,
+      dragMult: 1.0,
+      drumBpm: 90,
+      surf: {
+        schedule: [0.44, 0.51, 0.58],
+        surgeZone: [118, 148]
+      }
+    },
+    {
+      id: 'headwind',
+      name: 'HEADWIND',
+      hint: 'Slow, powerful strokes',
+      start: 0.65,
+      end: 0.85,
+      bpmZone: [58, 82],
+      seaPhase: 2,
+      impulseMult: 1.7,
+      dragMult: 0.8,
+      drumBpm: 70
+    },
+    {
+      id: 'sprint',
+      name: 'FINAL SPRINT',
+      hint: 'Empty the tank!',
+      start: 0.85,
+      end: 1.0,
+      bpmZone: [135, 165],
+      seaPhase: 2,
+      impulseMult: 0.95,
+      dragMult: 1.0,
+      drumBpm: 150
+    }
+  ],
 
   waves: {
-    progressMarks: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.92],
     ampByPhase: [1.2, 1.8, 2.6],
     sigma: 2.2,
-    speed: 8,
-    triggerDistance: 12,
-    rideImpulse: 3.2,
-    comboStep: 0.4,
-    comboCap: 5,
-    swampFactor: 0.45
-  },
-
-  timingWindow: {
-    perfect: 0.08,
-    good: 0.2
+    speed: 8
   },
 
   medals: {
-    gold: 62,
-    silver: 70,
-    bronze: 80
+    gold: 92,
+    silver: 105,
+    bronze: 120
   },
 
   drift: {
-    ambient: 0.3,
-    event: 1.2
+    ambient: 0.3
   },
 
   phases: [
@@ -80,6 +167,8 @@ export const RACE_CONFIG = {
     strokeKick: 0.6,
     perfectKick: 6,
     badKick: -4,
+    surfKick: 7,
+    surfLift: 0.8,
     shakeDuration: 0.6,
     shakeIntensity: 0.35,
     phaseOffsets: [

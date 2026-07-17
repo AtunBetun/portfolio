@@ -37,6 +37,10 @@ export default class RaceCamera {
     this.countdownProgress = 0
     this.countdownStart = { distance: 14, height: 6, angleOffset: 0.5 }
 
+    // Surf lift — extra height while riding a wave
+    this.surfing = false
+    this.surfLiftCurrent = 0
+
     // Finish orbit
     this.finishMode = false
     this.finishElapsed = 0
@@ -179,9 +183,13 @@ export default class RaceCamera {
       0.5
     const lateral = lateralSway + windSway
 
+    // Surf lift eases in while riding, out when the wave releases
+    const surfTarget = this.surfing ? RACE_CONFIG.camera.surfLift : 0
+    this.surfLiftCurrent = THREE.MathUtils.damp(this.surfLiftCurrent, surfTarget, 4, delta)
+
     const desired = new THREE.Vector3(
       boatPosition.x - forwardX * this.currentDistance + rightX * lateral,
-      boatPosition.y + this.currentHeight + verticalSway,
+      boatPosition.y + this.currentHeight + verticalSway + this.surfLiftCurrent,
       boatPosition.z - forwardZ * this.currentDistance + rightZ * lateral
     )
     this.currentPos.lerp(desired, this.posLerp)
@@ -237,7 +245,14 @@ export default class RaceCamera {
       this.fovKick += config.badKick
       this.fovKickDecay = 0.3
       this.shake = config.shakeIntensity
+    } else if (type === 'surf') {
+      this.fovKick += config.surfKick
+      this.fovKickDecay = 0.5
     }
+  }
+
+  setSurfing(surfing) {
+    this.surfing = surfing
   }
 
   startFinish() {
@@ -258,6 +273,8 @@ export default class RaceCamera {
     this.finishMode = false
     this.finishElapsed = 0
     this.finishOrbitAngle = 0
+    this.surfing = false
+    this.surfLiftCurrent = 0
 
     this.setPhase(0)
     const phase0 = RACE_CONFIG.camera.phaseOffsets[0]

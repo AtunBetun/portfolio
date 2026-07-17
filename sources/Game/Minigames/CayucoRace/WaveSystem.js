@@ -205,7 +205,6 @@ export default class WaveSystem {
       z: boatZ + EVENT_WAVE_SPAWN_AHEAD,
       amp: RACE_CONFIG.waves.ampByPhase[this.phase],
       active: true,
-      ringTriggered: false,
       foam: [],
       foamOffsets: []
     }
@@ -224,26 +223,6 @@ export default class WaveSystem {
 
     this.eventWaves.push(wave)
     return wave
-  }
-
-  checkEventWaveNear(boatZ) {
-    let nearest = null
-    let nearestDistance = Infinity
-
-    for (const wave of this.eventWaves) {
-      if (!wave.active) continue
-      const distance = wave.z - boatZ
-      if (
-        distance >= 0 &&
-        distance <= RACE_CONFIG.waves.triggerDistance &&
-        distance < nearestDistance
-      ) {
-        nearest = wave
-        nearestDistance = distance
-      }
-    }
-
-    return nearest
   }
 
   setPhase(phaseIndex) {
